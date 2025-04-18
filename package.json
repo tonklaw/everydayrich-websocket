@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "nodemon",
     "build": "next build && tsc --project tsconfig.server.json",
-    "start": "node dist/server.js",
+    "start": "node build/server.js",
     "lint": "next lint",
     "prepare": "husky",
     "test": "vitest",
