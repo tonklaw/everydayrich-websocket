@@ -1,1 +1,21 @@
-pnpm dlx commitlint --edit $1
+echo "🔍 Starting pre-commit checks..."
+
+echo "🔬 Running ESLint..."
+pnpm lint
+
+echo "📝 Updating git index after formatting..."
+git update-index --again
+
+echo "🔎 Checking for changed TypeScript files..."
+changed_files=$(git diff --cached --name-only --diff-filter=AM | grep -E '\.(ts|tsx)$' || true)
+
+if [ -n "$changed_files" ]; then
+  echo "🧪 Running Vitest on changed files:"
+  echo "$changed_files"
+  echo "-------------------"
+  pnpm exec vitest related --run $changed_files --passWithNoTests
+else
+  echo "✨ No TypeScript files changed, skipping tests."
+fi
+
+echo "✅ Pre-commit checks completed!"
