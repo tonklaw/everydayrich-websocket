@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/tonklaw/everydayrich-websocket/compare/v1.0.0...v1.0.1) (2025-04-18)
+
+
+### Bug Fixes
+
+* release ([1f56f10](https://github.com/tonklaw/everydayrich-websocket/commit/1f56f10584ef8be6cbd7eed6e096cbb6ff7d261e))
+
 # 1.0.0 (2025-04-18)
 
 
