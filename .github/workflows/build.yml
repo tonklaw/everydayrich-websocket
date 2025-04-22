@@ -54,9 +54,12 @@ jobs:
     concurrency:
       group: docker-${{ github.ref }}
       cancel-in-progress: true
-    name: Build and Push Docker Image
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    name: Build and Push Docker Image (${{ matrix.platform }})
     needs: build-test
-    runs-on: ubuntu-latest
+    runs-on: ${{ (matrix.platform == 'linux/amd64') && 'ubuntu-latest' || (matrix.platform == 'linux/arm64') && 'ubuntu-24.04-arm'}}
     environment: Staging
     outputs:
       build-image-digest: ${{ steps.docker-build.outputs.digest }}
@@ -90,7 +93,7 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
