@@ -4,7 +4,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Chat Application",
+  title: "EverydayRich Chat Application",
   description: "Real-time chat application with Socket.io",
 };
 
