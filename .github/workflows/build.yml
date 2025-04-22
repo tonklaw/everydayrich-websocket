@@ -94,65 +94,65 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-    deploy:
-      concurrency:
-        group: deploy-${{ github.ref }}
-        cancel-in-progress: true
-      name: Deploy to deploys.app
-      needs: docker
-      runs-on: ubuntu-latest
-      environment: Staging
-      env:
-        DEPLOYS_AUTH_USER: ${{ secrets.DEPLOYS_AUTH_USER }}
-        DEPLOYS_AUTH_PASS: ${{ secrets.DEPLOYS_AUTH_PASS }}
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v3
+  deploy:
+    concurrency:
+      group: deploy-${{ github.ref }}
+      cancel-in-progress: true
+    name: Deploy to deploys.app
+    needs: docker
+    runs-on: ubuntu-latest
+    environment: Staging
+    env:
+      DEPLOYS_AUTH_USER: ${{ secrets.DEPLOYS_AUTH_USER }}
+      DEPLOYS_AUTH_PASS: ${{ secrets.DEPLOYS_AUTH_PASS }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-        - name: Add Deploy Status to PR
-          id: deploy-status
-          uses: mshick/add-pr-comment@v2
-          with:
-            message: |
-              ### <span aria-hidden="true">🚀</span> Preview deployment is in progress...
+      - name: Add Deploy Status to PR
+        id: deploy-status
+        uses: mshick/add-pr-comment@v2
+        with:
+          message: |
+            ### <span aria-hidden="true">🚀</span> Preview deployment is in progress...
 
-              The preview deployment is being prepared. This may take a few minutes. Please wait for the deployment to complete before checking the preview URL.
-              | Name | Resource |
-              |:-:|------------------------|
-              |<span aria-hidden="true">🔨</span> Latest Commit | ${{ github.sha }} |
-              |<span aria-hidden="true">📦</span> Image Digest | ${{ needs.build.outputs.build-image-digest }} |
-        
-        - name: Install Deploys CLI
-          run: script/install-deploys-cli.sh
+            The preview deployment is being prepared. This may take a few minutes. Please wait for the deployment to complete before checking the preview URL.
+            | Name | Resource |
+            |:-:|------------------------|
+            |<span aria-hidden="true">🔨</span> Latest Commit | ${{ github.sha }} |
+            |<span aria-hidden="true">📦</span> Image Digest | ${{ needs.build.outputs.build-image-digest }} |
+      
+      - name: Install Deploys CLI
+        run: script/install-deploys-cli.sh
 
-        - name: Create deployment
-          run: |
-            deploys deployment deploy \
-              -project=tonklaw-projects	\
-              -location=gke.cluster-rcf2 \
-              -image=ghcr.io/${{ github.repository }}@${{ needs.docker.outputs.build-image-digest }} \
-              -name=preview-${{ github.event.number }}
+      - name: Create deployment
+        run: |
+          deploys deployment deploy \
+            -project=tonklaw-projects	\
+            -location=gke.cluster-rcf2 \
+            -image=ghcr.io/${{ github.repository }}@${{ needs.docker.outputs.build-image-digest }} \
+            -name=preview-${{ github.event.number }}
 
-        - name: Get deployment URL
-          id: deployment-url
-          run: |
-            URL=$(deploys deployment get \
-              -project=tonklaw-projects	\
-              -location=gke.cluster-rcf2 \
-              -name=preview-${{ github.event.number }} \
-              -oyaml \
-            | grep '^url:' | sed 's/^url: //')
-            echo "url=$URL" >> $GITHUB_ENV
+      - name: Get deployment URL
+        id: deployment-url
+        run: |
+          URL=$(deploys deployment get \
+            -project=tonklaw-projects	\
+            -location=gke.cluster-rcf2 \
+            -name=preview-${{ github.event.number }} \
+            -oyaml \
+          | grep '^url:' | sed 's/^url: //')
+          echo "url=$URL" >> $GITHUB_ENV
 
-        - name: Update PR comment with deployment URL
-          uses: mshick/add-pr-comment@v2
-          with:
-            message: |
-              ### <span aria-hidden="true">🚀</span> Preview deployment is ready!
+      - name: Update PR comment with deployment URL
+        uses: mshick/add-pr-comment@v2
+        with:
+          message: |
+            ### <span aria-hidden="true">🚀</span> Preview deployment is ready!
 
-              The preview deployment is ready. You can access the preview at the following URL: https://${{ env.URL }}.
+            The preview deployment is ready. You can access the preview at the following URL: https://${{ env.URL }}.
 
-              | Name | Resource |
-              |:-:|------------------------|
-              |<span aria-hidden="true">🔨</span> Latest Commit | ${{ github.sha }} |
-              |<span aria-hidden="true">📦</span> Image Digest | ${{ needs.build.outputs.build-image-digest }} |
+            | Name | Resource |
+            |:-:|------------------------|
+            |<span aria-hidden="true">🔨</span> Latest Commit | ${{ github.sha }} |
+            |<span aria-hidden="true">📦</span> Image Digest | ${{ needs.build.outputs.build-image-digest }} |
