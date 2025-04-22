@@ -41,6 +41,15 @@ app.prepare().then(() => {
   const connectedUsers = new Map<string, string>(); // socketId -> username
   const socketsByUsername = new Map<string, string>(); // username -> socketId
   
+  // Global chat history storage
+  const chatHistory = new Map<string, ChatMessage[]>(); // channelId -> messages
+  const directMessageHistory = new Map<string, ChatMessage[]>(); // userId_userId -> messages
+
+  function getDirectMessageKey(sender: string, recipient: string): string {
+    // Creates a consistent key regardless of who's sending to whom
+    return [sender, recipient].sort().join('_');
+  }
+
   // Store groups
   const groups = new Map<string, Group>();
 
@@ -70,18 +79,46 @@ app.prepare().then(() => {
       const clientList = Array.from(connectedUsers.values());
       io.emit('clients', clientList);
       
-      // Send existing groups to the connected user
+      // Send existing groups to the newly connected user
       socket.emit('groups', Array.from(groups.values()));
+      
+      // Send broadcast chat history
+      const broadcastHistory = chatHistory.get('broadcast') || [];
+      if (broadcastHistory.length > 0) {
+        socket.emit('chat_history', { channel: '', messages: broadcastHistory });
+      }
+      
+      // Send direct message history for this user
+      clientList.forEach(client => {
+        if (client === username) return; // Skip self
+        
+        const dmKey = getDirectMessageKey(username, client);
+        const dmHistory = directMessageHistory.get(dmKey) || [];
+        if (dmHistory.length > 0) {
+          socket.emit('chat_history', { channel: client, messages: dmHistory });
+        }
+      });
       
       // Join socket rooms for groups this user is a member of
       groups.forEach((group, groupName) => {
         if (group.type === 'public' || group.members.includes(username)) {
           socket.join(groupName);
+          
+          // Send chat history for this group
+          const groupHistory = chatHistory.get(groupName) || [];
+          if (groupHistory.length > 0) {
+            socket.emit('chat_history', { channel: groupName, messages: groupHistory });
+          }
+          
+          // Send updated member list to the newly joined user
+          socket.emit('group_members', {
+            groupName,
+            members: group.members,
+          });
         }
       });
     });
 
-    // Handle message sending
     socket.on('send_message', (message: ChatMessage) => {
       const senderUsername = connectedUsers.get(socket.id);
       if (!senderUsername) return;
@@ -92,6 +129,11 @@ app.prepare().then(() => {
       if (!message.to) {
         // Broadcast message to all users except sender
         socket.broadcast.emit('message', message);
+        
+        // Store in global chat history
+        const broadcastMessages = chatHistory.get('broadcast') || [];
+        broadcastMessages.push(message);
+        chatHistory.set('broadcast', broadcastMessages);
       } else if (groups.has(message.to)) {
         // Group message
         const group = groups.get(message.to)!;
@@ -102,11 +144,23 @@ app.prepare().then(() => {
           return;
         }
         
+        // Store message in group chat history
+        const groupMessages = chatHistory.get(message.to) || [];
+        groupMessages.push(message);
+        chatHistory.set(message.to, groupMessages);
+        
         // Send to all group members except sender
         socket.to(message.to).emit('message', message);
       } else {
-        // Direct message
+        // Direct message to a specific user
         const recipientSocketId = socketsByUsername.get(message.to);
+        
+        // Store message in direct message history
+        const dmKey = getDirectMessageKey(senderUsername, message.to);
+        const dmMessages = directMessageHistory.get(dmKey) || [];
+        dmMessages.push(message);
+        directMessageHistory.set(dmKey, dmMessages);
+        
         if (recipientSocketId) {
           io.to(recipientSocketId).emit('message', message);
         }
@@ -151,11 +205,8 @@ app.prepare().then(() => {
         }
       });
       
-      // Notify all clients about the new group
-      io.emit('group_created', {
-        name: groupData.groupName,
-        type: groupData.type,
-      });
+      // Notify all clients about the new group with complete group info
+      io.emit('group_created', group);
       
       // Send member list to group members
       io.to(groupData.groupName).emit('group_members', {
@@ -197,6 +248,33 @@ app.prepare().then(() => {
         } else {
           socket.emit('error', 'This is a private group');
         }
+      }
+    });
+
+    // Add a new event handler for requesting chat history
+    socket.on('request_chat_history', ({ channel }) => {
+      const username = connectedUsers.get(socket.id);
+      if (!username) return;
+      
+      if (!channel) {
+        // Broadcast history
+        const history = chatHistory.get('broadcast') || [];
+        socket.emit('chat_history', { channel: '', messages: history });
+      } else if (groups.has(channel)) {
+        // Group history
+        const group = groups.get(channel)!;
+        if (group.type === 'private' && !group.members.includes(username)) {
+          socket.emit('error', 'You are not a member of this private group');
+          return;
+        }
+        
+        const history = chatHistory.get(channel) || [];
+        socket.emit('chat_history', { channel, messages: history });
+      } else {
+        // Direct message history
+        const dmKey = getDirectMessageKey(username, channel);
+        const history = directMessageHistory.get(dmKey) || [];
+        socket.emit('chat_history', { channel, messages: history });
       }
     });
 

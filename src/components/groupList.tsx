@@ -1,13 +1,11 @@
 // app/components/groupList.tsx
 "use client";
-
-import { useSocket } from "./socketProvider";
-
 interface GroupProps {
   groups: Group[];
   username: string;
   onSelectGroup: (groupName: string) => void;
   selectedGroup: string;
+  onJoinGroup: (groupName: string) => void;
 }
 
 interface Group {
@@ -21,26 +19,20 @@ export default function GroupList({
   username,
   onSelectGroup,
   selectedGroup,
+  onJoinGroup,
 }: GroupProps) {
-  const socket = useSocket();
-
-  const handleJoinGroup = (groupName: string) => {
-    if (socket) {
-      socket.emit("join_group", groupName);
-    }
-  };
+  // Filter groups to show public groups and private groups the user is a member of
+  const availableGroups = groups.filter(group => 
+    group.type === "public" || group.members.includes(username)
+  );
 
   return (
     <div className="mb-4">
       <h3 className="font-medium text-sm text-gray-700 mb-2">Groups</h3>
       <div className="flex flex-col gap-1">
-        {groups.map((group) => {
-          // Check if user can access this group
+        {availableGroups.map((group) => {
           const isMember = group.members.includes(username);
-          const canAccess = group.type === "public" || isMember;
           
-          if (!canAccess) return null;
-
           return (
             <div key={group.name} className="flex items-center">
               <button
@@ -59,7 +51,7 @@ export default function GroupList({
               
               {!isMember && group.type === "public" && (
                 <button
-                  onClick={() => handleJoinGroup(group.name)}
+                  onClick={() => onJoinGroup(group.name)}
                   className="ml-2 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
                 >
                   Join

@@ -44,8 +44,9 @@ export default function Home() {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
-  const [groupType, setGroupType] = useState("public");
+  const [groupType, setGroupType] = useState<"public" | "private">("public");
   const [groups, setGroups] = useState<Group[]>([]);
+  const [activeChatMembers, setActiveChatMembers] = useState<string[]>([]);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -57,19 +58,31 @@ export default function Home() {
   }, [chatHistory, selectedUser]);
 
   useEffect(() => {
-    setClients(accounts.map((acc) => acc.username));
-  }, [accounts]);
-
-  useEffect(() => {
     if (!socket) return;
 
     // Handle incoming messages
     socket.on("message", (msg: ChatMessage) => {
-      const key = msg.to || "";
-      setChatHistory((prev) => ({
-        ...prev,
-        [key]: [...(prev[key] || []), { ...msg, timestamp: Date.now() }],
-      }));
+      setChatHistory((prev) => {
+        // For direct messages between users, we need to use a consistent key
+        // regardless of whether you're the sender or receiver
+        let key = msg.to;
+        
+        // If it's a direct message to me, store it under the sender's name for the chat history
+        if (msg.to === username && msg.from !== username) {
+          key = msg.from;
+        }
+        
+        // If it's a broadcast message
+        if (!msg.to) {
+          key = "";
+        }
+        
+        const existingMessages = prev[key] || [];
+        return {
+          ...prev,
+          [key]: [...existingMessages, { ...msg, timestamp: Date.now() }],
+        };
+      });
     });
 
     // Handle client list updates
@@ -77,16 +90,19 @@ export default function Home() {
       setClients(clientList);
     });
 
+    // Handle groups list updates
+    socket.on("groups", (groupsList: Group[]) => {
+      setGroups(groupsList);
+    });
+
     // Handle new group creation
-    socket.on("group_created", (group: { name: string; type: string }) => {
-      setGroups((prev) => [
-        ...prev,
-        {
-          name: group.name,
-          type: group.type as "public" | "private",
-          members: [], // Server will manage actual membership
-        },
-      ]);
+    socket.on("group_created", (group: Group) => {
+      setGroups((prev) => {
+        // Check if the group already exists to prevent duplicates
+        const exists = prev.some(g => g.name === group.name);
+        if (exists) return prev;
+        return [...prev, group];
+      });
     });
 
     // Handle group member list updates
@@ -94,15 +110,76 @@ export default function Home() {
       setGroups(prev => 
         prev.map(g => g.name === groupName ? { ...g, members } : g)
       );
+      
+      // Update active chat members if this is the currently selected group
+      if (selectedUser === groupName) {
+        setActiveChatMembers(members);
+      }
+    });
+
+    // Handle chat history
+    socket.on('chat_history', ({ channel, messages }: { channel: string, messages: ChatMessage[] }) => {
+      setChatHistory(prev => {
+        // For direct messages, make sure we use the correct key
+        const key = channel;
+        
+        // Keep any existing messages to avoid duplicates
+        const existingMessages = prev[key] || [];
+        const existingIds = new Set(existingMessages.map(msg => msg.timestamp));
+        
+        // Filter out messages that already exist in our chat history
+        const newMessages = messages.filter(msg => !existingIds.has(msg.timestamp));
+        
+        return {
+          ...prev,
+          [key]: [...existingMessages, ...newMessages]
+        };
+      });
+    });
+
+    // Handle forced disconnect (logged in elsewhere)
+    socket.on("forced_disconnect", (message: string) => {
+      alert(message);
+      setIsLoggedIn(false);
+    });
+
+    // Handle error messages
+    socket.on("error", (errorMsg: string) => {
+      setError(errorMsg);
+      setTimeout(() => setError(""), 3000);
     });
 
     return () => {
       socket.off("message");
       socket.off("clients");
+      socket.off("groups");
       socket.off("group_created");
       socket.off("group_members");
+      socket.off("forced_disconnect");
+      socket.off("error");
     };
-  }, [socket]);
+  }, [socket, username]);
+
+  // Update active chat members when selected user changes
+  useEffect(() => {
+    if (selectedUser && selectedUser !== "") {
+      const selectedGroup = groups.find(g => g.name === selectedUser);
+      if (selectedGroup) {
+        setActiveChatMembers(selectedGroup.members);
+      } else {
+        setActiveChatMembers([]);
+      }
+    } else {
+      setActiveChatMembers([]);
+    }
+  }, [selectedUser, groups]);
+
+  // Then add this effect to request chat history when selectedUser changes
+  useEffect(() => {
+    if (socket && isLoggedIn) {
+      socket.emit('request_chat_history', { channel: selectedUser });
+    }
+  }, [socket, selectedUser, isLoggedIn]);
 
   const handleLogin = () => {
     const user = accounts.find(
@@ -131,7 +208,7 @@ export default function Home() {
   };
 
   const handleSend = () => {
-    if (!message || !socket) return;
+    if (!message.trim() || !socket) return;
     const to = selectedUser;
     const newMessage: ChatMessage = { 
       from: username, 
@@ -140,10 +217,14 @@ export default function Home() {
       timestamp: Date.now()
     };
     
-    setChatHistory((prev) => ({
-      ...prev,
-      [to]: [...(prev[to] || []), newMessage],
-    }));
+    setChatHistory((prev) => {
+      const key = to || "";
+      const existingMessages = prev[key] || [];
+      return {
+        ...prev,
+        [key]: [...existingMessages, newMessage],
+      };
+    });
     
     socket.emit("send_message", newMessage);
     setMessage("");
@@ -174,24 +255,17 @@ export default function Home() {
     
     socket.emit("create_group", groupData);
     
-    // Add the group locally immediately for better UX
-    setGroups((prev) => [
-      ...prev,
-      {
-        name: groupName,
-        type: groupType as "public" | "private",
-        members,
-      },
-    ]);
-    
+    // Close the modal but don't manually add group - let server event handle it
     setShowCreateGroup(false);
     setGroupName("");
     setSelectedMembers([]);
     setGroupType("public");
   };
 
-  const handleSelectGroup = (groupName: string) => {
-    setSelectedUser(groupName);
+  const handleJoinGroup = (groupName: string) => {
+    if (socket) {
+      socket.emit("join_group", groupName);
+    }
   };
 
   const formatTime = (timestamp?: number) => {
@@ -265,7 +339,13 @@ export default function Home() {
                     .map((client) => (
                       <button
                         key={client}
-                        onClick={() => setSelectedUser(client)}
+                        onClick={() => {
+                          setSelectedUser(client);
+                          // Request chat history when selecting a user
+                          if (socket) {
+                            socket.emit('request_chat_history', { channel: client });
+                          }
+                        }}
                         className={`text-left px-3 py-1.5 rounded text-sm ${
                           selectedUser === client ? "bg-green-100 text-green-800" : "hover:bg-gray-100"
                         }`}
@@ -280,8 +360,9 @@ export default function Home() {
               <GroupList
                 groups={groups}
                 username={username}
-                onSelectGroup={handleSelectGroup}
+                onSelectGroup={handleSelectGroup => setSelectedUser(handleSelectGroup)}
                 selectedGroup={selectedUser}
+                onJoinGroup={handleJoinGroup}
               />
               
               <button
@@ -297,13 +378,18 @@ export default function Home() {
               <div className="flex flex-col h-[80vh]">
                 {/* Chat Header */}
                 <div className="pb-3 border-b border-gray-200 mb-4 flex justify-between items-center">
-                  <h2 className="font-bold text-lg">
-                    {selectedUser
-                      ? selectedUser.startsWith("#")
+                  <div>
+                    <h2 className="font-bold text-lg">
+                      {selectedUser
                         ? selectedUser
-                        : `Chat with ${selectedUser}`
-                      : "Broadcast Message"}
-                  </h2>
+                        : "Broadcast Message"}
+                    </h2>
+                    {activeChatMembers.length > 0 && (
+                      <p className="text-xs text-gray-500">
+                        Members: {activeChatMembers.join(", ")}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 
                 {/* Chat Messages */}
@@ -396,7 +482,7 @@ export default function Home() {
                       name="groupType"
                       value="public"
                       checked={groupType === "public"}
-                      onChange={(e) => setGroupType(e.target.value)}
+                      onChange={() => setGroupType("public")}
                     />
                     Public
                   </label>
@@ -406,7 +492,7 @@ export default function Home() {
                       name="groupType"
                       value="private"
                       checked={groupType === "private"}
-                      onChange={(e) => setGroupType(e.target.value)}
+                      onChange={() => setGroupType("private")}
                     />
                     Private
                   </label>
