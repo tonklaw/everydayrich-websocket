@@ -1,26 +1,23 @@
-import type React from "react";
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { SocketProvider } from "@/components/socketProvider";
 import "./globals.css";
+import type { Metadata } from "next";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 
-const inter = Inter({ subsets: ["latin"] });
-
 export const metadata: Metadata = {
-  title: "Chat Application",
-  description: "A modern chat application",
+  title: "EverydayRich Chat Application",
+  description: "Real-time chat application with Socket.io",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
+          <SocketProvider>{children}</SocketProvider>
         </ThemeProvider>
       </body>
     </html>
