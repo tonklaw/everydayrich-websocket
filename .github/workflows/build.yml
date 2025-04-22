@@ -52,7 +52,7 @@ jobs:
 
   docker:
     concurrency:
-      group: docker-${{ github.ref }}
+      group: docker-${{ github.ref }}-${{ matrix.platform }}
       cancel-in-progress: true
     strategy:
       matrix:
