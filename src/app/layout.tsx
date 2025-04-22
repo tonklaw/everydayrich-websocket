@@ -1,4 +1,3 @@
-// app/layout.tsx
 import { SocketProvider } from "@/components/socketProvider";
 import "./globals.css";
 import type { Metadata } from "next";

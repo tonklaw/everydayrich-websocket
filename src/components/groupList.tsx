@@ -1,4 +1,3 @@
-// app/components/groupList.tsx
 "use client";
 interface GroupProps {
   groups: Group[];

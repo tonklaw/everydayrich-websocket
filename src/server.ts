@@ -1,4 +1,3 @@
-// src/server.ts
 import 'dotenv/config';
 import next from 'next';
 import { Server, Socket } from 'socket.io';
