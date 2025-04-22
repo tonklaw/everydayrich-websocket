@@ -125,7 +125,7 @@ jobs:
             |<span aria-hidden="true">📦</span> Image Digest | ${{ needs.docker.outputs.build-image-digest }} |
       
       - name: Install Deploys CLI
-        run: script/install-deploys-cli.sh
+        run: scripts/install-deploys-cli.sh
 
       - name: Create deployment
         run: |
