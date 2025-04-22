@@ -120,7 +120,7 @@ jobs:
             | Name | Resource |
             |:-:|------------------------|
             |<span aria-hidden="true">🔨</span> Latest Commit | ${{ github.sha }} |
-            |<span aria-hidden="true">📦</span> Image Digest | ${{ needs.build.outputs.build-image-digest }} |
+            |<span aria-hidden="true">📦</span> Image Digest | ${{ needs.docker.outputs.build-image-digest }} |
       
       - name: Install Deploys CLI
         run: script/install-deploys-cli.sh
@@ -142,7 +142,7 @@ jobs:
             -name=preview-${{ github.event.number }} \
             -oyaml \
           | grep '^url:' | sed 's/^url: //')
-          echo "url=$URL" >> $GITHUB_ENV
+          echo "URL=${URL}" >> $GITHUB_ENV
 
       - name: Update PR comment with deployment URL
         uses: mshick/add-pr-comment@v2
@@ -155,4 +155,4 @@ jobs:
             | Name | Resource |
             |:-:|------------------------|
             |<span aria-hidden="true">🔨</span> Latest Commit | ${{ github.sha }} |
-            |<span aria-hidden="true">📦</span> Image Digest | ${{ needs.build.outputs.build-image-digest }} |
+            |<span aria-hidden="true">📦</span> Image Digest | ${{ needs.docker.outputs.build-image-digest }} |
