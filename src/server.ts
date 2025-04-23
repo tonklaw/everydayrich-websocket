@@ -15,14 +15,16 @@ import {
   handleJoinGroup,
   sendRequestedChatHistory,
   handleDisconnection,
+  broadcastClients,
+  broadcastGroups,
 } from "./lib/functions";
-import { LoginRequest, LoginResponse } from "./type/login";
+import { LoginRequest } from "./type/login";
 import {
   CHAT_HISTORY,
-  CONNECTED_BROWSER,
+  CONNECTED_USERTAG,
   DIRECT_MESSAGE_HISTORY,
   GROUPS,
-  SOCKET_BY_BROWSER,
+  SOCKET_BY_USERTAG,
 } from "./lib/database";
 
 const app = next({ dev: process.env.NODE_ENV !== "production" });
@@ -43,8 +45,6 @@ app.prepare().then(async () => {
     socket.on(
       "join",
       ({ username, password, browserId }: LoginRequest, callback) => {
-        console.log(`User ${username} joined with socket ID ${socket.id}`);
-
         // Store user connection
         const ack = storeUserConnection(
           socket.id,
@@ -54,16 +54,15 @@ app.prepare().then(async () => {
         );
 
         if (!ack.success) {
-          callback({ success: false });
+          callback({ success: false, error: ack.error });
           return;
         }
+        console.log(
+          `${username}#${ack.tag} joined with socket ID ${socket.id}`,
+        );
 
-        // Send updated client list to everyone
-        const clientList = Array.from(CONNECTED_BROWSER.values());
-        io.emit("clients", clientList);
-
-        // Send existing groups to the newly connected user
-        socket.emit("groups", Array.from(GROUPS.values()));
+        // Join socket rooms for groups this user is a member of
+        callback({ success: true, tag: ack.tag });
 
         // Send broadcast chat history
         sendBroadcastHistory(socket, CHAT_HISTORY);
@@ -72,18 +71,23 @@ app.prepare().then(async () => {
         sendDirectMessageHistory(
           socket,
           username,
-          clientList,
+
           DIRECT_MESSAGE_HISTORY,
         );
 
-        // Join socket rooms for groups this user is a member of
         joinUserToGroups(socket, username, GROUPS, CHAT_HISTORY);
-        callback({ success: true, tag: ack.tag });
+        broadcastClients(io);
+        broadcastGroups(io);
       },
     );
 
+    socket.on("clients", (_, callback) => {
+      const clientList = Array.from(CONNECTED_USERTAG.values());
+      callback(clientList);
+    });
+
     socket.on("send_message", (message: ChatMessage) => {
-      const senderUsername = CONNECTED_BROWSER.get(socket.id);
+      const senderUsername = CONNECTED_USERTAG.get(socket.id);
       if (!senderUsername) return;
 
       message.timestamp = Date.now(); // Add server timestamp
@@ -107,7 +111,7 @@ app.prepare().then(async () => {
           io,
           message,
           senderUsername,
-          SOCKET_BY_BROWSER,
+          SOCKET_BY_USERTAG,
           DIRECT_MESSAGE_HISTORY,
         );
       }
@@ -117,7 +121,7 @@ app.prepare().then(async () => {
     socket.on(
       "create_group",
       (groupData: { groupName: string; members: string[] }) => {
-        const creatorUsername = CONNECTED_BROWSER.get(socket.id);
+        const creatorUsername = CONNECTED_USERTAG.get(socket.id);
         if (!creatorUsername) return;
 
         console.log("Creating group:", groupData);
@@ -127,14 +131,14 @@ app.prepare().then(async () => {
           creatorUsername,
           groupData,
           GROUPS,
-          SOCKET_BY_BROWSER,
+          SOCKET_BY_USERTAG,
         );
       },
     );
 
     // Handle user joining a group
     socket.on("join_group", (groupName: string) => {
-      const username = CONNECTED_BROWSER.get(socket.id);
+      const username = CONNECTED_USERTAG.get(socket.id);
       if (!username) return;
 
       handleJoinGroup(io, socket, username, groupName, GROUPS);
@@ -142,7 +146,7 @@ app.prepare().then(async () => {
 
     // Add a new event handler for requesting chat history
     socket.on("request_chat_history", ({ channel }) => {
-      const username = CONNECTED_BROWSER.get(socket.id);
+      const username = CONNECTED_USERTAG.get(socket.id);
       if (!username) return;
 
       sendRequestedChatHistory(
@@ -157,7 +161,7 @@ app.prepare().then(async () => {
 
     // Handle disconnection
     socket.on("disconnect", () => {
-      const username = CONNECTED_BROWSER.get(socket.id);
+      const username = CONNECTED_USERTAG.get(socket.id);
       if (username) {
         handleDisconnection(io, socket.id, username);
       }

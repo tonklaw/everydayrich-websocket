@@ -1,15 +1,23 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import { v4 as uuidv4 } from "uuid";
 import { io, Socket } from "socket.io-client";
 import { LoginRequest, LoginResponse } from "@/type/login";
+import { ChatMessage } from "@/type/chat-message";
 
 interface AppContextType {
-  token: string | null;
+  tag: string | null;
+  username: string | null;
+  onlineUsers: string[];
   browserId: string;
-  setTag: (token: string | null) => void;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<LoginResponse>;
   logout: () => void;
   socket: Socket | null;
 }
@@ -20,13 +28,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [tag, setTagState] = useState<string | null>(null);
+  const [username, setUsernameState] = useState<string | null>(null);
   const [browserId, setBrowserId] = useState<string>("");
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
   useEffect(() => {
     // Initialize state from localStorage in useEffect to avoid SSR issues
     if (typeof window !== "undefined") {
-      setTagState(localStorage.getItem("app_token"));
+      setTagState(localStorage.getItem("user_tag"));
+      setUsernameState(localStorage.getItem("user_username"));
 
       const storedBrowserId = localStorage.getItem("app_browser_id");
       if (storedBrowserId) {
@@ -43,6 +54,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     // Initialize Socket.io connection
     const socketInstance = io();
+    socketInstance.on("connect", () => {
+      console.log("Socket connected");
+    });
+    socketInstance.on("disconnect", () => {
+      console.log("Socket disconnected");
+    });
+    socketInstance.on("error", (error) => {
+      console.error("Socket error:", error);
+    });
+    socketInstance.on("groups", (groups: string[]) => {
+      console.log("Groups:", groups);
+    });
+
+    socketInstance.on("clients", (users: string[]) => {
+      setOnlineUsers(users);
+    });
+
+    socketInstance.on("message", (data: ChatMessage) => {
+      console.log("Message received:", data);
+    });
 
     setSocket(socketInstance);
 
@@ -66,37 +97,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     setTagState(newToken);
     if (typeof window !== "undefined") {
       if (newToken) {
-        localStorage.setItem("app_token", newToken);
+        localStorage.setItem("user_tag", newToken);
       } else {
-        localStorage.removeItem("app_token");
+        localStorage.removeItem("user_tag");
+      }
+    }
+  };
+
+  const setUsername = (newUsername: string | null) => {
+    setUsernameState(newUsername);
+    if (typeof window !== "undefined") {
+      if (newUsername) {
+        localStorage.setItem("user_username", newUsername);
+      } else {
+        localStorage.removeItem("user_username");
       }
     }
   };
 
   const login = async (username: string, password: string) => {
     const payload: LoginRequest = { username, password, browserId };
-    return new Promise<boolean>((resolve) => {
+    return new Promise<LoginResponse>((resolve) => {
       if (socket) {
         socket.emit("join", payload, (ack: LoginResponse) => {
           if (ack.success) {
-            if (ack.tag) setTag(ack.tag);
+            setUsername(username);
+            if (ack.tag) {
+              setTag(ack.tag);
+            }
           }
-          resolve(ack.success);
+          resolve({ tag: ack.tag, success: ack.success, error: ack.error });
         });
       } else {
-        resolve(false);
+        resolve({ success: false, error: "Socket not initialized" });
       }
     });
   };
 
   const logout = () => {
     setTag(null);
+    setUsername(null);
   };
 
   const value = {
-    token: tag,
+    tag,
+    username,
     browserId,
-    setTag,
+    onlineUsers,
     login,
     logout,
     socket,

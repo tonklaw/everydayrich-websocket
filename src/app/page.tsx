@@ -50,10 +50,7 @@ import { useApp } from "@/components/app-context";
 import { LoginForm } from "@/components/widget/login-form";
 
 export default function Home() {
-  const { login } = useApp();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const { tag, onlineUsers, username, socket } = useApp();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const [chatHistory, setChatHistory] = useState<Record<string, ChatMessage[]>>(
@@ -80,7 +77,6 @@ export default function Home() {
       ],
     },
   );
-  const [clients, _setClients] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [message, setMessage] = useState("");
   const [typingUsers, _setTypingUsers] = useState<Record<string, boolean>>({});
@@ -116,22 +112,6 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleLogin = () => {
-    if (!username || !password) {
-      setError("Please enter both username and password");
-      return;
-    }
-
-    login(username, password).then((success) => {
-      if (success) {
-        setIsLoggedIn(true);
-        setError("");
-      } else {
-        setError("Invalid username or password");
-      }
-    });
-  };
-
   const handleSend = () => {
     if (!message.trim()) return;
     sendMessage(message, "text");
@@ -141,17 +121,20 @@ export default function Home() {
     const to = selectedUser;
     const newMessage: ChatMessage = {
       id: Date.now().toString(),
-      from: username,
+      from: username!,
       to,
       text: content,
       timestamp: Date.now(),
       type,
     };
 
-    setChatHistory((prev) => ({
-      ...prev,
-      [to]: [...(prev[to] || []), newMessage],
-    }));
+    // setChatHistory((prev) => ({
+    //   ...prev,
+    //   [to]: [...(prev[to] || []), newMessage],
+    // }));
+
+    // Emit the message to the server
+    if (socket) socket.emit("send_message", newMessage);
 
     setMessage("");
 
@@ -338,8 +321,6 @@ export default function Home() {
 
   const handleLogout = () => {
     setIsLoggedIn(false);
-    setUsername("");
-    setPassword("");
   };
 
   const isUserTyping = () => {
@@ -398,14 +379,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4">
       <div className="max-w-7xl mx-auto">
         {!isLoggedIn ? (
-          <LoginForm
-            username={username}
-            password={password}
-            error={error}
-            setUsername={setUsername}
-            setPassword={setPassword}
-            handleLogin={handleLogin}
-          />
+          <LoginForm setIsLoggedIn={setIsLoggedIn} />
         ) : (
           <div className="w-full h-[calc(100vh-4rem)] flex flex-col md:flex-row gap-4">
             {/* Sidebar */}
@@ -414,12 +388,17 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10">
-                      <AvatarFallback className="bg-emerald-500 text-white">
-                        {getInitials(username)}
-                      </AvatarFallback>
+                      {username && (
+                        <AvatarFallback className="bg-emerald-500 text-white">
+                          {getInitials(username)}
+                        </AvatarFallback>
+                      )}
                     </Avatar>
                     <div>
-                      <CardTitle className="text-lg">{username}</CardTitle>
+                      <CardTitle className="text-lg">
+                        {username}
+                        <span className="text-gray-500 text-sm">#{tag}</span>
+                      </CardTitle>
                       <Badge variant="outline" className="text-xs mt-1">
                         Online
                       </Badge>
@@ -465,7 +444,7 @@ export default function Home() {
                       <span className="truncate">Broadcast</span>
                     </Button>
 
-                    {clients
+                    {onlineUsers
                       .filter((client) => client !== username)
                       .map((client) => (
                         <div
@@ -758,7 +737,7 @@ export default function Home() {
         setShowCreateGroup={setShowCreateGroup}
         groupName={groupName}
         setGroupName={setGroupName}
-        clients={clients}
+        clients={onlineUsers}
         selectedMembers={selectedMembers}
         handleToggleMember={handleToggleMember}
         handleCreateGroup={handleCreateGroup}

@@ -1,28 +1,18 @@
 import { ChatMessage } from "@/type/chat-message";
 import { Group } from "@/type/group";
 import { Socket, Server } from "socket.io";
-import jwt from "jsonwebtoken";
 import {
-  CONNECTED_BROWSER,
-  JWT_SECRET,
-  SOCKET_BY_BROWSER,
+  CONNECTED_USERTAG,
+  GROUPS,
+  SOCKET_BY_USERTAG,
   USERS,
 } from "./database";
-
-// Function to generate a JWT token
-export const generateToken = (
-  userId: string,
-  username: string,
-  tag: string,
-): string => {
-  return jwt.sign({ userId, username, tag }, JWT_SECRET, { expiresIn: "24h" });
-};
 
 // Function to find user by username and tag
 export function findUserByUsernameAndTag(username: string, tag: string) {
   for (const [userId, user] of USERS.entries()) {
     if (user.username === username && user.tag === tag) {
-      return { ...user, id: userId };
+      return { ...user, browserId: userId };
     }
   }
   return null;
@@ -44,6 +34,16 @@ export function storeUserConnection(
   let tag;
   if (!USERS.has(browserId)) {
     tag = Math.random().toString(36).substring(2, 6).toUpperCase();
+
+    let retryCount = 0;
+    while (findUserByUsernameAndTag(username, tag) && retryCount < 3) {
+      tag = Math.random().toString(36).substring(2, 6).toUpperCase();
+      retryCount++;
+    }
+    if (retryCount === 3 && findUserByUsernameAndTag(username, tag)) {
+      return { tag: null, success: false, error: "Too many username existed" };
+    }
+
     USERS.set(browserId, {
       username,
       password,
@@ -55,11 +55,15 @@ export function storeUserConnection(
       tag = user.tag;
     }
   }
-
-  CONNECTED_BROWSER.set(socketId, username);
-  SOCKET_BY_BROWSER.set(username, socketId);
-
-  return { tag, success: tag && true };
+  if (username && tag) {
+    CONNECTED_USERTAG.set(socketId, `${username}#${tag}`);
+    SOCKET_BY_USERTAG.set(`${username}#${tag}`, socketId);
+  }
+  return {
+    tag,
+    success: tag && true,
+    error: !tag && "Invalid username or password",
+  };
 }
 
 // Function to send chat history to user
@@ -86,10 +90,9 @@ export function sendBroadcastHistory(
 export function sendDirectMessageHistory(
   socket: Socket,
   username: string,
-  clients: string[],
   directMessageHistory: Map<string, ChatMessage[]>,
 ) {
-  clients.forEach((client) => {
+  CONNECTED_USERTAG.forEach((client) => {
     if (client === username) return; // Skip self
 
     const dmKey = getDirectMessageKey(username, client);
@@ -322,12 +325,24 @@ export function sendRequestedChatHistory(
 export function handleDisconnection(
   io: Server,
   socketId: string,
-  username: string,
+  usertag: string,
 ) {
-  console.log(`User ${username} disconnected:`, socketId);
-  SOCKET_BY_BROWSER.delete(username);
-  CONNECTED_BROWSER.delete(socketId);
+  console.log(`${usertag} disconnected:`, socketId);
+  SOCKET_BY_USERTAG.delete(usertag);
+  CONNECTED_USERTAG.delete(socketId);
 
-  // Send updated client list to everyone
-  io.emit("clients", Array.from(CONNECTED_BROWSER.values()));
+  broadcastClients(io);
+}
+
+export function broadcastClients(io: Server) {
+  const clientList = Array.from(CONNECTED_USERTAG.values());
+  io.emit("clients", clientList);
+}
+
+export function broadcastGroups(io: Server) {
+  const groupList = Array.from(GROUPS.values()).map((group) => ({
+    name: group.name,
+    members: group.members,
+  }));
+  io.emit("groups", groupList);
 }

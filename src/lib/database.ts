@@ -10,8 +10,8 @@ export const ACTIVE_USERS = new Map();
 export const JWT_SECRET = process.env.JWT_SECRET || "secret-key";
 
 // Track connected users and their socket IDs
-export const CONNECTED_BROWSER = new Map<string, string>(); // socketId -> username
-export const SOCKET_BY_BROWSER = new Map<string, string>(); // username -> socketId
+export const CONNECTED_USERTAG = new Map<string, string>(); // socketId -> usertag
+export const SOCKET_BY_USERTAG = new Map<string, string>(); // usertag -> socketId
 
 // Global chat history storage
 export const CHAT_HISTORY = new Map<string, ChatMessage[]>(); // channelId -> messages

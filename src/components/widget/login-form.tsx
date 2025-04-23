@@ -3,22 +3,35 @@ import { Button } from "../ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 import { Input } from "../ui/input";
 import { ModeToggle } from "../ui/mode-toggle";
+import { useState } from "react";
+import { useApp } from "../app-context";
 
 export function LoginForm({
-  username,
-  setUsername,
-  password,
-  setPassword,
-  error,
-  handleLogin,
+  setIsLoggedIn,
 }: {
-  username: string;
-  setUsername: (username: string) => void;
-  password: string;
-  setPassword: (password: string) => void;
-  error: string | null;
-  handleLogin: () => void;
+  setIsLoggedIn: (isLoggedIn: boolean) => void;
 }) {
+  const { login } = useApp();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const handleLogin = () => {
+    if (!username || !password) {
+      setError("Please enter both username and password");
+      return;
+    }
+
+    login(username, password).then(({ success, error }) => {
+      if (success) {
+        setIsLoggedIn(true);
+        setError("");
+      } else {
+        setError(error || "Login failed");
+      }
+    });
+  };
+
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
       <Card className="w-full max-w-md shadow-lg">
