@@ -29,7 +29,6 @@ export function CreateGroupDialog({
   handleToggleMember: (member: string) => void;
   handleCreateGroup: () => void;
 }) {
-  console.log(selectedMembers);
   return (
     <Dialog open={showCreateGroup} onOpenChange={setShowCreateGroup}>
       <DialogContent className="sm:max-w-md p-6">

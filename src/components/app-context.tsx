@@ -12,6 +12,7 @@ import { io, Socket } from "socket.io-client";
 import { LoginRequest, LoginResponse } from "@/type/login";
 import { ChatMessage } from "@/type/chat-message";
 import { Group } from "@/type/group";
+import { CHAT_THEMES, ChatTheme } from "@/constants/chat-theme";
 
 interface AppContextType {
   tag: string | null;
@@ -21,6 +22,8 @@ interface AppContextType {
   typingUsers: Record<string, boolean>;
   browserId: string;
   chatHistory: Record<string, ChatMessage[]>;
+  chatThemeSettings: Record<string, Omit<ChatTheme, "name">>;
+  onSetTheme: (channel: string, idx: number) => void;
   setChatHistory: Dispatch<React.SetStateAction<Record<string, ChatMessage[]>>>;
   login: (username: string, password: string) => Promise<LoginResponse>;
   logout: () => void;
@@ -39,6 +42,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [userGroups, setUserGroups] = useState<Group[]>([]);
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
+  const [chatThemeSettings, setChatThemeSettings] = useState<
+    Record<string, Omit<ChatTheme, "name">>
+  >({});
   const [chatHistory, setChatHistory] = useState<Record<string, ChatMessage[]>>(
     {
       "": [
@@ -101,10 +107,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       setTypingUsers((prev) => ({ ...prev, [username]: false }));
     });
 
-    socketInstance.on("message", (data: ChatMessage) => {
-      setChatHistory((prev) => ({
+    socketInstance.on("theme", (data: { channel: string; idx: number }) => {
+      setChatThemeSettings((prev) => ({
         ...prev,
-        [data.to]: [...(prev[data.to] || []), data],
+        [data.channel]: CHAT_THEMES[data.idx],
       }));
     });
 
@@ -124,6 +130,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (socket) {
+      socket.on("message", (data: ChatMessage) => {
+        setChatHistory((prev) => {
+          const channel =
+            data.to === `${username}#${tag}` ? data.from : data.to;
+          const messages = prev[channel] || [];
+          return {
+            ...prev,
+            [channel]: [...messages, data],
+          };
+        });
+      });
+    }
+    return () => {
+      if (socket) {
+        socket.off("message");
+      }
+    };
+  }, [socket, username, tag]);
 
   useEffect(() => {
     // Ensure browser ID persists
@@ -182,6 +209,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     setUsername(null);
   };
 
+  const onSetTheme = (channel: string, idx: number) => {
+    if (channel.includes("#")) {
+      channel = [channel, `${username}#${tag}`].sort().join("_");
+    }
+    socket?.emit("theme", { channel, idx });
+  };
+
   const value = {
     tag,
     username,
@@ -190,6 +224,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     userGroups,
     chatHistory,
     setChatHistory,
+    chatThemeSettings,
+    onSetTheme,
     typingUsers,
     login,
     logout,
