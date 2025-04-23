@@ -160,6 +160,20 @@ app.prepare().then(async () => {
       );
     });
 
+    socket.on("typing", () => {
+      const username = CONNECTED_USERTAG.get(socket.id);
+      if (!username) return;
+      console.log(username, "is typing");
+      socket.broadcast.emit("typing", { username });
+    });
+
+    socket.on("stop_typing", () => {
+      const username = CONNECTED_USERTAG.get(socket.id);
+      if (!username) return;
+      console.log(username, "is not typing");
+      socket.broadcast.emit("stop_typing", { username });
+    });
+
     // Handle disconnection
     socket.on("disconnect", () => {
       const username = CONNECTED_USERTAG.get(socket.id);

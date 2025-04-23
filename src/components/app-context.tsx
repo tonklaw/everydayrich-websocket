@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-} from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { io, Socket } from "socket.io-client";
 import { LoginRequest, LoginResponse } from "@/type/login";
@@ -16,6 +10,7 @@ interface AppContextType {
   tag: string | null;
   username: string | null;
   onlineUsers: string[];
+  typingUsers: Record<string, boolean>;
   browserId: string;
   login: (username: string, password: string) => Promise<LoginResponse>;
   logout: () => void;
@@ -32,6 +27,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [browserId, setBrowserId] = useState<string>("");
   const [socket, setSocket] = useState<Socket | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     // Initialize state from localStorage in useEffect to avoid SSR issues
@@ -69,6 +65,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
     socketInstance.on("clients", (users: string[]) => {
       setOnlineUsers(users);
+    });
+
+    socketInstance.on("typing", ({ username }: { username: string }) => {
+      setTypingUsers((prev) => ({ ...prev, [username]: true }));
+    });
+
+    socketInstance.on("stop_typing", ({ username }: { username: string }) => {
+      setTypingUsers((prev) => ({ ...prev, [username]: false }));
     });
 
     socketInstance.on("message", (data: ChatMessage) => {
@@ -144,6 +148,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     username,
     browserId,
     onlineUsers,
+    typingUsers,
     login,
     logout,
     socket,

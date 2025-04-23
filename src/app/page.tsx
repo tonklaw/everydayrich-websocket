@@ -50,7 +50,7 @@ import { useApp } from "@/components/app-context";
 import { LoginForm } from "@/components/widget/login-form";
 
 export default function Home() {
-  const { tag, onlineUsers, username, socket } = useApp();
+  const { tag, onlineUsers, username, socket, typingUsers } = useApp();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const [chatHistory, setChatHistory] = useState<Record<string, ChatMessage[]>>(
@@ -65,21 +65,10 @@ export default function Home() {
           type: "text",
         },
       ],
-      mew: [
-        {
-          id: "2",
-          from: "mew",
-          to: "mim",
-          text: "Hey there! How are you?",
-          timestamp: Date.now() - 3600000,
-          type: "text",
-        },
-      ],
     },
   );
   const [selectedUser, setSelectedUser] = useState("");
   const [message, setMessage] = useState("");
-  const [typingUsers, _setTypingUsers] = useState<Record<string, boolean>>({});
   const [isTyping, setIsTyping] = useState(false);
   const [editingMessage, setEditingMessage] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -153,20 +142,10 @@ export default function Home() {
         }
         scrollToBottom();
       });
-
-      socket.on("typing", (user: string) => {
-        _setTypingUsers((prev) => ({ ...prev, [user]: true }));
-      });
-
-      socket.on("stop_typing", (user: string) => {
-        _setTypingUsers((prev) => ({ ...prev, [user]: false }));
-      });
     }
     return () => {
       if (socket) {
         socket.off("message");
-        socket.off("typing");
-        socket.off("stop_typing");
       }
     };
   }, [socket, username, tag]);
@@ -176,6 +155,7 @@ export default function Home() {
   };
 
   const handleToggleMember = (member: string) => {
+    console.log(selectedMembers, member);
     setSelectedMembers((prev) =>
       prev.includes(member)
         ? prev.filter((m) => m !== member)
@@ -212,6 +192,7 @@ export default function Home() {
   const handleTyping = () => {
     if (!isTyping) {
       setIsTyping(true);
+      if (socket) socket.emit("typing", { username: `${username}#${tag}` });
     }
 
     // Clear existing timeout
@@ -228,6 +209,8 @@ export default function Home() {
   const handleTypingStop = () => {
     if (isTyping) {
       setIsTyping(false);
+      if (socket)
+        socket.emit("stop_typing", { username: `${username}#${tag}` });
     }
 
     if (typingTimeoutRef.current) {

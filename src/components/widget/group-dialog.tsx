@@ -1,4 +1,3 @@
-import { Checkbox } from "@radix-ui/react-checkbox";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +29,7 @@ export function CreateGroupDialog({
   handleToggleMember: (member: string) => void;
   handleCreateGroup: () => void;
 }) {
+  console.log(selectedMembers);
   return (
     <Dialog open={showCreateGroup} onOpenChange={setShowCreateGroup}>
       <DialogContent className="sm:max-w-md p-6">
@@ -56,12 +56,13 @@ export function CreateGroupDialog({
             <Label>Members</Label>
             <div className="border rounded-md p-3 max-h-40 overflow-y-auto grid grid-cols-2 gap-2">
               {clients.map((client) => (
-                <div key={client} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`member-${client}`}
-                    checked={selectedMembers.includes(client)}
-                    onCheckedChange={() => handleToggleMember(client)}
-                  />
+                <div
+                  key={client}
+                  className={`flex items-center space-x-2 cursor-pointer ${
+                    selectedMembers.includes(client) ? "text-emerald-500" : ""
+                  }`}
+                  onClick={() => handleToggleMember(client)}
+                >
                   <Label htmlFor={`member-${client}`} className="text-sm">
                     {client}
                   </Label>
