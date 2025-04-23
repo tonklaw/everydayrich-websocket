@@ -21,6 +21,7 @@ import {
 import { LoginRequest } from "./type/login";
 import {
   CHAT_HISTORY,
+  CHAT_THEME,
   CONNECTED_USERTAG,
   DIRECT_MESSAGE_HISTORY,
   GROUPS,
@@ -132,6 +133,24 @@ app.prepare().then(async () => {
       },
     );
 
+    socket.on("theme", ({ channel, idx }: { channel: string; idx: number }) => {
+      const username = CONNECTED_USERTAG.get(socket.id);
+      if (!username) return;
+
+      if (channel === "") {
+        // Handle broadcast theme change
+        CHAT_THEME.set("", idx);
+        io.emit("theme", { channel, idx });
+      } else if (GROUPS.has(channel)) {
+        // Handle group theme change
+        CHAT_THEME.set(channel, idx);
+        GROUPS.get(channel)!.theme = idx;
+        io.to(channel).emit("theme", { channel, idx });
+      } else {
+        CHAT_THEME.set(channel, idx);
+        io.emit("theme", { channel, idx });
+      }
+    });
     // Handle user joining a group
     socket.on("join_group", (groupName: string) => {
       const username = CONNECTED_USERTAG.get(socket.id);

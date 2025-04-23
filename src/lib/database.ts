@@ -19,3 +19,4 @@ export const DIRECT_MESSAGE_HISTORY = new Map<string, ChatMessage[]>(); // userI
 
 // Store groups
 export const GROUPS = new Map<string, Group>();
+export const CHAT_THEME = new Map<string, number>();

@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import Image from "next/image";
-import { CHAT_THEMES, ChatTheme } from "@/constants/chat-theme";
+import { CHAT_THEMES } from "@/constants/chat-theme";
 import { ChatMessage } from "@/type/chat-message";
 import { CHAT_EMOJIS, CHAT_STICKERS } from "@/constants/stickers";
 import { ThemeDialog } from "@/components/widget/theme-dialog";
@@ -58,6 +58,8 @@ export default function Home() {
     typingUsers,
     chatHistory,
     setChatHistory,
+    chatThemeSettings,
+    onSetTheme,
   } = useApp();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedUser, setSelectedUser] = useState("");
@@ -73,9 +75,6 @@ export default function Home() {
   const [nicknameTarget, setNicknameTarget] = useState("");
 
   // Chat theme feature
-  const [chatThemeSettings, setChatThemeSettings] = useState<
-    Record<string, Omit<ChatTheme, "name">>
-  >({});
   const [showThemeDialog, setShowThemeDialog] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState(0);
 
@@ -275,17 +274,7 @@ export default function Home() {
   };
 
   const saveTheme = () => {
-    if (selectedUser) {
-      setChatThemeSettings((prev) => ({
-        ...prev,
-        [selectedUser]: {
-          primary: CHAT_THEMES[selectedTheme].primary,
-          secondary: CHAT_THEMES[selectedTheme].secondary,
-          hoverPrimary: CHAT_THEMES[selectedTheme].hoverPrimary,
-          hoverSecondary: CHAT_THEMES[selectedTheme].hoverSecondary,
-        },
-      }));
-    }
+    onSetTheme(selectedUser, selectedTheme);
     setShowThemeDialog(false);
   };
 
@@ -345,8 +334,12 @@ export default function Home() {
 
   // Get chat theme for current selected user
   const getCurrentChatTheme = () => {
-    if (selectedUser && chatThemeSettings[selectedUser]) {
-      return chatThemeSettings[selectedUser];
+    const channel = selectedUser.includes("#")
+      ? [selectedUser, `${username}#${tag}`].sort().join("_")
+      : selectedUser;
+    console.log(channel);
+    if (selectedUser && chatThemeSettings[channel]) {
+      return chatThemeSettings[channel];
     }
     return {
       primary: CHAT_THEMES[0].primary,

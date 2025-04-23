@@ -3,6 +3,7 @@ import { Group } from "@/type/group";
 import { Socket, Server } from "socket.io";
 import {
   CHAT_HISTORY,
+  CHAT_THEME,
   CONNECTED_USERTAG,
   DIRECT_MESSAGE_HISTORY,
   GROUPS,
@@ -293,6 +294,7 @@ export function sendRequestedChatHistory(
   if (!channel) {
     // Broadcast history
     const history = chatHistory.get("broadcast") || [];
+    socket.emit("theme", { channel, idx: CHAT_THEME.get(channel) || 0 });
     socket.emit("chat_history", { channel: "", messages: history });
   } else if (groups.has(channel)) {
     // Group history
@@ -303,11 +305,17 @@ export function sendRequestedChatHistory(
     }
 
     const history = chatHistory.get(channel) || [];
+    socket.emit("theme", { channel, idx: CHAT_THEME.get(channel) || 0 });
     socket.emit("chat_history", { channel, messages: history });
   } else {
     // Direct message history
     const dmKey = getDirectMessageKey(username, channel);
     const history = directMessageHistory.get(dmKey) || [];
+    socket.emit("theme", {
+      channel: [username, channel].sort().join("_"),
+      idx: CHAT_THEME.get(channel) || 0,
+    });
+
     socket.emit("chat_history", { channel, messages: history });
   }
 
