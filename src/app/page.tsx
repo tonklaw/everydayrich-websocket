@@ -12,19 +12,8 @@ import {
   CardTitle,
   CardFooter,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Popover,
@@ -51,103 +40,21 @@ import {
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import Image from "next/image";
-
-const initialAccounts = [
-  { username: "mim", password: "1234" },
-  { username: "mew", password: "abcd" },
-  { username: "min", password: "password" },
-  { username: "moo", password: "secure" },
-];
-
-interface ChatMessage {
-  id: string;
-  from: string;
-  to: string;
-  text: string;
-  timestamp: number;
-  type: "text" | "sticker";
-  edited?: boolean;
-}
-
-// Predefined stickers
-const stickers = [
-  { id: "s1", url: "/stickers/happy.png", alt: "Happy face" },
-  { id: "s2", url: "/stickers/sad.png", alt: "Sad face" },
-  { id: "s3", url: "/stickers/love.png", alt: "Love heart" },
-  { id: "s4", url: "/stickers/laugh.png", alt: "Laughing face" },
-  { id: "s5", url: "/stickers/cool.png", alt: "Cool face" },
-  { id: "s6", url: "/stickers/angry.png", alt: "Angry face" },
-  { id: "s7", url: "/stickers/surprised.png", alt: "Surprised face" },
-  { id: "s8", url: "/stickers/thinking.png", alt: "Thinking face" },
-];
-
-// Emoji set for quick access
-const emojis = [
-  "😊",
-  "😂",
-  "❤️",
-  "👍",
-  "🎉",
-  "🔥",
-  "😎",
-  "🤔",
-  "😢",
-  "😍",
-  "🙏",
-  "👏",
-];
-
-// Chat theme colors
-const chatThemes = [
-  {
-    name: "Default",
-    primary: "bg-emerald-500",
-    secondary: "bg-gray-200 dark:bg-gray-700",
-  },
-  {
-    name: "Blue",
-    primary: "bg-blue-500",
-    secondary: "bg-blue-100 dark:bg-blue-900",
-  },
-  {
-    name: "Purple",
-    primary: "bg-purple-500",
-    secondary: "bg-purple-100 dark:bg-purple-900",
-  },
-  {
-    name: "Pink",
-    primary: "bg-pink-500",
-    secondary: "bg-pink-100 dark:bg-pink-900",
-  },
-  {
-    name: "Orange",
-    primary: "bg-orange-500",
-    secondary: "bg-orange-100 dark:bg-orange-900",
-  },
-  {
-    name: "Red",
-    primary: "bg-red-500",
-    secondary: "bg-red-100 dark:bg-red-900",
-  },
-  {
-    name: "Yellow",
-    primary: "bg-yellow-500",
-    secondary: "bg-yellow-100 dark:bg-yellow-900",
-  },
-  {
-    name: "Teal",
-    primary: "bg-teal-500",
-    secondary: "bg-teal-100 dark:bg-teal-900",
-  },
-];
+import { CHAT_THEMES, ChatTheme } from "@/constants/chat-theme";
+import { ChatMessage } from "@/type/chat-message";
+import { CHAT_EMOJIS, CHAT_STICKERS } from "@/constants/stickers";
+import { ThemeDialog } from "@/components/widget/theme-dialog";
+import { NicknameDialog } from "@/components/widget/nickname-dialog";
+import { CreateGroupDialog } from "@/components/widget/group-dialog";
+import { useApp } from "@/components/app-context";
+import { LoginForm } from "@/components/widget/login-form";
 
 export default function Home() {
-  const [accounts, setAccounts] = useState(initialAccounts);
+  const { login } = useApp();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
 
   const [chatHistory, setChatHistory] = useState<Record<string, ChatMessage[]>>(
     {
@@ -173,10 +80,9 @@ export default function Home() {
       ],
     },
   );
-  const [clients, setClients] = useState<string[]>([]);
+  const [clients, _setClients] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [message, setMessage] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [typingUsers, _setTypingUsers] = useState<Record<string, boolean>>({});
   const [isTyping, setIsTyping] = useState(false);
   const [editingMessage, setEditingMessage] = useState<string | null>(null);
@@ -190,7 +96,7 @@ export default function Home() {
 
   // Chat theme feature
   const [chatThemeSettings, setChatThemeSettings] = useState<
-    Record<string, { primary: string; secondary: string }>
+    Record<string, Omit<ChatTheme, "name">>
   >({});
   const [showThemeDialog, setShowThemeDialog] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState(0);
@@ -201,10 +107,6 @@ export default function Home() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    setClients(accounts.map((acc) => acc.username));
-  }, [accounts]);
 
   useEffect(() => {
     scrollToBottom();
@@ -220,32 +122,14 @@ export default function Home() {
       return;
     }
 
-    const user = accounts.find(
-      (acc) => acc.username === username && acc.password === password,
-    );
-    if (user) {
-      setIsLoggedIn(true);
-      setError("");
-    } else {
-      setError("Invalid username or password");
-    }
-  };
-
-  const handleRegister = () => {
-    if (!username || !password) {
-      setError("Please enter both username and password");
-      return;
-    }
-
-    const exists = accounts.some((acc) => acc.username === username);
-    if (exists) {
-      setError("Username already exists");
-    } else {
-      const newAccount = { username, password };
-      setAccounts((prev) => [...prev, newAccount]);
-      setIsLoggedIn(true);
-      setError("");
-    }
+    login(username, password).then((success) => {
+      if (success) {
+        setIsLoggedIn(true);
+        setError("");
+      } else {
+        setError("Invalid username or password");
+      }
+    });
   };
 
   const handleSend = () => {
@@ -414,7 +298,7 @@ export default function Home() {
     if (selectedUser) {
       const currentTheme = chatThemeSettings[selectedUser];
       const themeIndex = currentTheme
-        ? chatThemes.findIndex(
+        ? CHAT_THEMES.findIndex(
             (theme) =>
               theme.primary === currentTheme.primary &&
               theme.secondary === currentTheme.secondary,
@@ -431,8 +315,10 @@ export default function Home() {
       setChatThemeSettings((prev) => ({
         ...prev,
         [selectedUser]: {
-          primary: chatThemes[selectedTheme].primary,
-          secondary: chatThemes[selectedTheme].secondary,
+          primary: CHAT_THEMES[selectedTheme].primary,
+          secondary: CHAT_THEMES[selectedTheme].secondary,
+          hoverPrimary: CHAT_THEMES[selectedTheme].hoverPrimary,
+          hoverSecondary: CHAT_THEMES[selectedTheme].hoverSecondary,
         },
       }));
     }
@@ -466,20 +352,20 @@ export default function Home() {
   };
 
   const renderSticker = (stickerId: string) => {
-    const sticker = stickers.find((s) => s.id === stickerId);
+    const sticker = CHAT_STICKERS.find((s) => s.id === stickerId);
     if (!sticker) {
       return <div className="text-4xl">🏷️</div>;
     }
     return (
       <div className="w-16 h-16 flex items-center justify-center">
         <Image
-          src={sticker.url || "/placeholder.svg?height=64&width=64"}
+          src={sticker.url || "/vercel.svg?height=64&width=64"}
           alt={sticker.alt}
           className="max-w-full max-h-full"
           // Fallback for demo purposes
           onError={(e) => {
             const target = e.target as HTMLImageElement;
-            target.src = `/placeholder.svg?height=64&width=64&text=${sticker.id}`;
+            target.src = `/vercel.svg?height=64&width=64&text=${sticker.id}`;
           }}
         />
       </div>
@@ -501,8 +387,10 @@ export default function Home() {
       return chatThemeSettings[selectedUser];
     }
     return {
-      primary: chatThemes[0].primary,
-      secondary: chatThemes[0].secondary,
+      primary: CHAT_THEMES[0].primary,
+      secondary: CHAT_THEMES[0].secondary,
+      hoverPrimary: CHAT_THEMES[0].hoverPrimary,
+      hoverSecondary: CHAT_THEMES[0].hoverSecondary,
     };
   };
 
@@ -510,103 +398,14 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4">
       <div className="max-w-7xl mx-auto">
         {!isLoggedIn ? (
-          <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-            <Card className="w-full max-w-md shadow-lg">
-              <CardHeader className="pb-6 pt-8 px-6">
-                <div className="flex justify-end mb-2">
-                  <ModeToggle />
-                </div>
-                <CardTitle className="text-center text-2xl font-bold">
-                  {isRegistering ? "Create Account" : "Welcome Back"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-6 pb-8">
-                <Tabs
-                  defaultValue="login"
-                  value={isRegistering ? "register" : "login"}
-                >
-                  <TabsList className="grid w-full grid-cols-2 mb-8">
-                    <TabsTrigger
-                      value="login"
-                      onClick={() => setIsRegistering(false)}
-                    >
-                      Login
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="register"
-                      onClick={() => setIsRegistering(true)}
-                    >
-                      Register
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="login" className="space-y-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="username">Username</Label>
-                      <Input
-                        id="username"
-                        placeholder="Enter your username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label htmlFor="password">Password</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        placeholder="Enter your password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                    </div>
-                    {error && (
-                      <p className="text-red-500 text-sm mt-2">{error}</p>
-                    )}
-                    <Button
-                      className="w-full mt-2"
-                      size="lg"
-                      onClick={handleLogin}
-                    >
-                      Sign In
-                    </Button>
-                  </TabsContent>
-
-                  <TabsContent value="register" className="space-y-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="new-username">Username</Label>
-                      <Input
-                        id="new-username"
-                        placeholder="Choose a username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label htmlFor="new-password">Password</Label>
-                      <Input
-                        id="new-password"
-                        type="password"
-                        placeholder="Choose a password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                    </div>
-                    {error && (
-                      <p className="text-red-500 text-sm mt-2">{error}</p>
-                    )}
-                    <Button
-                      className="w-full mt-2"
-                      size="lg"
-                      onClick={handleRegister}
-                    >
-                      Create Account
-                    </Button>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </div>
+          <LoginForm
+            username={username}
+            password={password}
+            error={error}
+            setUsername={setUsername}
+            setPassword={setPassword}
+            handleLogin={handleLogin}
+          />
         ) : (
           <div className="w-full h-[calc(100vh-4rem)] flex flex-col md:flex-row gap-4">
             {/* Sidebar */}
@@ -875,7 +674,7 @@ export default function Home() {
                     </PopoverTrigger>
                     <PopoverContent className="w-64 p-2" align="end">
                       <div className="grid grid-cols-6 gap-1 mb-2">
-                        {emojis.map((emoji, i) => (
+                        {CHAT_EMOJIS.map((emoji, i) => (
                           <Button
                             key={i}
                             variant="ghost"
@@ -889,7 +688,7 @@ export default function Home() {
                       <div className="border-t pt-2">
                         <h4 className="text-sm font-medium mb-1">Stickers</h4>
                         <div className="grid grid-cols-4 gap-1">
-                          {stickers.map((sticker) => (
+                          {CHAT_STICKERS.map((sticker) => (
                             <TooltipProvider key={sticker.id}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -900,19 +699,31 @@ export default function Home() {
                                       handleSendSticker(sticker.id)
                                     }
                                   >
-                                    <Image
-                                      src={
-                                        sticker.url ||
-                                        `/placeholder.svg?height=48&width=48`
-                                      }
-                                      alt={sticker.alt}
-                                      className="max-w-full max-h-full"
-                                      onError={(e) => {
-                                        const target =
-                                          e.target as HTMLImageElement;
-                                        target.src = `/placeholder.svg?height=48&width=48&text=${sticker.id}`;
-                                      }}
-                                    />
+                                    <div className="relative w-full h-full flex items-center justify-center">
+                                      <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                      </div>
+                                      <Image
+                                        src={
+                                          sticker.url ||
+                                          `/vercel.svg?height=48&width=48`
+                                        }
+                                        alt={sticker.alt}
+                                        className="max-w-full max-h-full relative z-10"
+                                        onError={(e) => {
+                                          const target =
+                                            e.target as HTMLImageElement;
+                                          target.src = `/vercel.svg?height=48&width=48&text=${sticker.id}`;
+                                        }}
+                                        onLoad={(e) => {
+                                          const target =
+                                            e.target as HTMLImageElement;
+                                          target.parentElement?.classList.add(
+                                            "loaded",
+                                          );
+                                        }}
+                                      />
+                                    </div>
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
@@ -928,7 +739,9 @@ export default function Home() {
 
                   <Button
                     onClick={editingMessage ? handleSaveEdit : handleSend}
-                    className="bg-emerald-500 hover:bg-emerald-600"
+                    className={`${getCurrentChatTheme().primary} ${
+                      getCurrentChatTheme().hoverPrimary
+                    }`}
                   >
                     <Send className="h-4 w-4" />
                   </Button>
@@ -940,171 +753,36 @@ export default function Home() {
       </div>
 
       {/* Create Group Dialog */}
-      <Dialog open={showCreateGroup} onOpenChange={setShowCreateGroup}>
-        <DialogContent className="sm:max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle>Create New Group</DialogTitle>
-            <DialogDescription>
-              Create a group chat where everyone can read messages, but only
-              members can send messages.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="group-name">Group Name</Label>
-              <Input
-                id="group-name"
-                placeholder="Enter group name"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Members</Label>
-              <div className="border rounded-md p-3 max-h-40 overflow-y-auto grid grid-cols-2 gap-2">
-                {clients.map((client) => (
-                  <div key={client} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`member-${client}`}
-                      checked={selectedMembers.includes(client)}
-                      onCheckedChange={() => handleToggleMember(client)}
-                    />
-                    <Label htmlFor={`member-${client}`} className="text-sm">
-                      {client}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateGroup(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateGroup}
-              className="bg-emerald-500 hover:bg-emerald-600"
-            >
-              Create Group
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CreateGroupDialog
+        showCreateGroup={showCreateGroup}
+        setShowCreateGroup={setShowCreateGroup}
+        groupName={groupName}
+        setGroupName={setGroupName}
+        clients={clients}
+        selectedMembers={selectedMembers}
+        handleToggleMember={handleToggleMember}
+        handleCreateGroup={handleCreateGroup}
+      />
 
       {/* Nickname Dialog */}
-      <Dialog open={showNicknameDialog} onOpenChange={setShowNicknameDialog}>
-        <DialogContent className="sm:max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle>Set Custom Name</DialogTitle>
-            <DialogDescription>
-              Set a custom name for{" "}
-              <span className="font-medium">{nicknameTarget}</span>. Only you
-              will see this name, and others will still see their original
-              username.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="nickname">Custom Name</Label>
-              <Input
-                id="nickname"
-                placeholder="Enter custom name"
-                value={nicknameInput}
-                onChange={(e) => setNicknameInput(e.target.value)}
-                autoFocus
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Leave empty to remove the custom name and revert to their
-                original username
-              </p>
-            </div>
-
-            <div className="bg-muted p-3 rounded-md">
-              <div className="flex items-center gap-2 mb-2">
-                <Avatar className="h-6 w-6">
-                  <AvatarFallback className="text-xs">
-                    {getInitials(nicknameTarget)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="font-medium">Preview:</div>
-              </div>
-              <div className="pl-8">
-                {nicknameInput ? (
-                  <div>
-                    <div className="font-medium">{nicknameInput}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Original: {nicknameTarget}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="font-medium">{nicknameTarget}</div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowNicknameDialog(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={saveNickname}
-              className="bg-emerald-500 hover:bg-emerald-600"
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <NicknameDialog
+        saveNickname={saveNickname}
+        nicknameInput={nicknameInput}
+        setNicknameInput={setNicknameInput}
+        setShowNicknameDialog={setShowNicknameDialog}
+        showNicknameDialog={showNicknameDialog}
+        nicknameTarget={nicknameTarget}
+        getInitials={getInitials}
+      />
 
       {/* Theme Dialog */}
-      <Dialog open={showThemeDialog} onOpenChange={setShowThemeDialog}>
-        <DialogContent className="sm:max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle>Chat Theme</DialogTitle>
-            <DialogDescription>
-              Choose a color theme for this chat
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4">
-            <div className="grid grid-cols-4 gap-3">
-              {chatThemes.map((theme, index) => (
-                <Button
-                  key={index}
-                  variant="outline"
-                  className={`h-12 w-full p-0 overflow-hidden ${selectedTheme === index ? "ring-2 ring-primary" : ""}`}
-                  onClick={() => setSelectedTheme(index)}
-                >
-                  <div className="flex flex-col w-full h-full">
-                    <div className={`h-1/2 w-full ${theme.primary}`}></div>
-                    <div className={`h-1/2 w-full ${theme.secondary}`}></div>
-                  </div>
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowThemeDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={saveTheme}
-              className="bg-emerald-500 hover:bg-emerald-600"
-            >
-              Apply Theme
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ThemeDialog
+        saveTheme={saveTheme}
+        selectedTheme={selectedTheme}
+        setSelectedTheme={setSelectedTheme}
+        setShowThemeDialog={setShowThemeDialog}
+        showThemeDialog={showThemeDialog}
+      />
     </div>
   );
 }
