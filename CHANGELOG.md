@@ -1,3 +1,25 @@
+# [1.1.0-beta.2](https://github.com/tonklaw/everydayrich-websocket/compare/v1.1.0-beta.1...v1.1.0-beta.2) (2025-04-23)
+
+
+### Features
+
+* trigger semver ([563a1ea](https://github.com/tonklaw/everydayrich-websocket/commit/563a1eab7346f43085467e97defaa52b64767429))
+
+# [1.1.0-beta.1](https://github.com/tonklaw/everydayrich-websocket/compare/v1.0.1...v1.1.0-beta.1) (2025-04-23)
+
+
+### Bug Fixes
+
+* build ([90e8c03](https://github.com/tonklaw/everydayrich-websocket/commit/90e8c03d1e893261b50b935f451e017e7431004b))
+* build error ([f212978](https://github.com/tonklaw/everydayrich-websocket/commit/f212978da8e17049e09e4edab66151f4564899dc))
+* some error ([6fa702a](https://github.com/tonklaw/everydayrich-websocket/commit/6fa702aef892decd484f2781b8990ea0876b2afd))
+
+
+### Features
+
+* custom server ([bcd6b39](https://github.com/tonklaw/everydayrich-websocket/commit/bcd6b393754dc13e236d366e0d66c95e618c4be1))
+* text chat ([27e4633](https://github.com/tonklaw/everydayrich-websocket/commit/27e463309ada4ecf2ac403919c0554bda318361d))
+
 ## [1.0.1](https://github.com/tonklaw/everydayrich-websocket/compare/v1.0.0...v1.0.1) (2025-04-18)
 
 
