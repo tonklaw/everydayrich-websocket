@@ -1,7 +1,832 @@
-import Home from "@/components/home";
+"use client";
 
-export default function ChatApp() {
+import type React from "react";
+
+import { useEffect, useState, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Send,
+  Users,
+  UserPlus,
+  LogOut,
+  Smile,
+  Check,
+  X,
+  Pencil,
+  Settings,
+  Edit2,
+} from "lucide-react";
+import { ModeToggle } from "@/components/ui/mode-toggle";
+import Image from "next/image";
+import { CHAT_THEMES } from "@/constants/chat-theme";
+import { ChatMessage } from "@/type/chat-message";
+import { CHAT_EMOJIS, CHAT_STICKERS } from "@/constants/stickers";
+import { ThemeDialog } from "@/components/widget/theme-dialog";
+import { NicknameDialog } from "@/components/widget/nickname-dialog";
+import { CreateGroupDialog } from "@/components/widget/group-dialog";
+import { useApp } from "@/components/app-context";
+import { LoginForm } from "@/components/widget/login-form";
+
+export default function Home() {
+  const {
+    tag,
+    onlineUsers,
+    userGroups,
+    username,
+    socket,
+    typingUsers,
+    chatHistory,
+    setChatHistory,
+    chatThemeSettings,
+    onSetTheme,
+  } = useApp();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [selectedUser, setSelectedUser] = useState("");
+  const [groupMembers, setGroupMembers] = useState<string[]>([]);
+  const [message, setMessage] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+
+  // Nickname feature
+  const [nicknames, setNicknames] = useState<Record<string, string>>({});
+  const [showNicknameDialog, setShowNicknameDialog] = useState(false);
+  const [nicknameInput, setNicknameInput] = useState("");
+  const [nicknameTarget, setNicknameTarget] = useState("");
+
+  // Chat theme feature
+  const [showThemeDialog, setShowThemeDialog] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState(0);
+
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (selectedUser) {
+      const group = userGroups.find((g) => g.name === selectedUser);
+      if (group) {
+        setGroupMembers([
+          `${username}#${tag}`,
+          ...group.members.filter((m) => m !== `${username}#${tag}`),
+        ]);
+      } else {
+        setGroupMembers([]);
+      }
+    }
+    scrollToBottom();
+  }, [chatHistory, selectedUser, username, tag, userGroups]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleSend = () => {
+    if (!message.trim()) return;
+    sendMessage(message, "text");
+  };
+
+  const sendMessage = (content: string, type: "text" | "sticker") => {
+    const to = selectedUser;
+    const newMessage: ChatMessage = {
+      id: Date.now().toString(),
+      from: `${username}#${tag}`,
+      to,
+      text: content,
+      timestamp: Date.now(),
+      type,
+    };
+
+    // Emit the message to the server
+    if (socket) socket.emit("send_message", newMessage);
+
+    setMessage("");
+
+    // Clear typing indicator when sending a message
+    handleTypingStop();
+  };
+
+  const handleSendSticker = (stickerId: string) => {
+    sendMessage(stickerId, "sticker");
+  };
+
+  const handleToggleMember = (member: string) => {
+    console.log(selectedMembers, member);
+    setSelectedMembers((prev) =>
+      prev.includes(member)
+        ? prev.filter((m) => m !== member)
+        : [...prev, member],
+    );
+  };
+
+  const handleCreateGroup = () => {
+    if (!groupName.trim()) {
+      return;
+    }
+
+    const groupData = {
+      groupName,
+      members: selectedMembers,
+    };
+    socket?.emit("create_group", groupData);
+    setShowCreateGroup(false);
+    setGroupName("");
+    setSelectedMembers([]);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (editingMessage) {
+        handleSaveEdit();
+      } else {
+        handleSend();
+      }
+    }
+  };
+
+  const handleTyping = () => {
+    if (!isTyping) {
+      setIsTyping(true);
+      if (socket)
+        socket.emit("typing", {
+          username: `${username}#${tag}`,
+          channel: selectedUser,
+        });
+    }
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set new timeout
+    typingTimeoutRef.current = setTimeout(() => {
+      handleTypingStop();
+    }, 2000);
+  };
+
+  const handleTypingStop = () => {
+    if (isTyping) {
+      setIsTyping(false);
+      if (socket)
+        socket.emit("stop_typing", {
+          username: `${username}#${tag}`,
+          channel: selectedUser,
+        });
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+  };
+
+  const handleEditMessage = (messageId: string, text: string) => {
+    setEditingMessage(messageId);
+    setEditText(text);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingMessage || !editText.trim()) {
+      setEditingMessage(null);
+      return;
+    }
+
+    // Update local state
+    const key = selectedUser || "";
+    setChatHistory((prev) => {
+      const messages = [...(prev[key] || [])];
+      const messageIndex = messages.findIndex(
+        (msg) => msg.id === editingMessage,
+      );
+
+      if (messageIndex !== -1) {
+        messages[messageIndex] = {
+          ...messages[messageIndex],
+          text: editText,
+          edited: true,
+        };
+      }
+
+      socket?.emit("edit_message", {
+        channel: key,
+        message: messages[messageIndex],
+      });
+
+      return {
+        ...prev,
+        [key]: messages,
+      };
+    });
+
+    setEditingMessage(null);
+    setEditText("");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessage(null);
+    setEditText("");
+  };
+
+  // Nickname handlers
+  const openNicknameDialog = (user: string) => {
+    setNicknameTarget(user);
+    setNicknameInput(nicknames[user] || "");
+    setShowNicknameDialog(true);
+  };
+
+  const saveNickname = () => {
+    if (nicknameInput.trim()) {
+      setNicknames((prev) => ({
+        ...prev,
+        [nicknameTarget]: nicknameInput.trim(),
+      }));
+      // Show success message
+      alert(
+        `Custom name for ${nicknameTarget} has been set to "${nicknameInput.trim()}"`,
+      );
+    } else {
+      // Remove nickname if empty
+      const newNicknames = { ...nicknames };
+      delete newNicknames[nicknameTarget];
+      setNicknames(newNicknames);
+      // Show removal message
+      alert(`Custom name for ${nicknameTarget} has been removed`);
+    }
+    setShowNicknameDialog(false);
+  };
+
+  // Theme handlers
+  const openThemeDialog = () => {
+    if (selectedUser) {
+      const currentTheme = chatThemeSettings[selectedUser];
+      const themeIndex = currentTheme
+        ? CHAT_THEMES.findIndex(
+            (theme) =>
+              theme.primary === currentTheme.primary &&
+              theme.secondary === currentTheme.secondary,
+          )
+        : 0;
+
+      setSelectedTheme(themeIndex >= 0 ? themeIndex : 0);
+      setShowThemeDialog(true);
+    }
+  };
+
+  const saveTheme = () => {
+    onSetTheme(selectedUser, selectedTheme);
+    setShowThemeDialog(false);
+  };
+
+  const getInitials = (name: string) => {
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const formatTime = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+  };
+
+  const isUserTyping = () => {
+    // const channel = selectedUser.includes("#")
+    //   ? [selectedUser, `${username}#${tag}`].sort().join("_")
+    //   : selectedUser;
+    const channel = selectedUser;
+    const myUserTag = `${username}#${tag}`;
+    const typingUsersInChannel = (typingUsers[channel] || []).filter(
+      (e) => e !== myUserTag,
+    );
+    return [
+      ...typingUsersInChannel,
+      ...(typingUsers[myUserTag] || []).filter((e) => e === channel),
+    ];
+  };
+
+  const renderSticker = (stickerId: string) => {
+    const sticker = CHAT_STICKERS.find((s) => s.id === stickerId);
+    if (!sticker) {
+      return <div className="text-4xl">🏷️</div>;
+    }
+    return (
+      <div className="w-16 h-16 flex items-center justify-center">
+        <Image
+          src={sticker.url || "/vercel.svg?height=64&width=64"}
+          alt={sticker.alt}
+          className="max-w-full max-h-full"
+          // Fallback for demo purposes
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = `/vercel.svg?height=64&width=64&text=${sticker.id}`;
+          }}
+        />
+      </div>
+    );
+  };
+
+  const addEmoji = (emoji: string) => {
+    setMessage((prev) => prev + emoji);
+  };
+
+  // Get display name (nickname or username)
+  const getDisplayName = (user: string) => {
+    return nicknames[user] || user;
+  };
+
+  // Get chat theme for current selected user
+  const getCurrentChatTheme = () => {
+    const channel = selectedUser.includes("#")
+      ? [selectedUser, `${username}#${tag}`].sort().join("_")
+      : selectedUser;
+    console.log(channel);
+    if (selectedUser && chatThemeSettings[channel]) {
+      return chatThemeSettings[channel];
+    }
+    return {
+      primary: CHAT_THEMES[0].primary,
+      secondary: CHAT_THEMES[0].secondary,
+      hoverPrimary: CHAT_THEMES[0].hoverPrimary,
+      hoverSecondary: CHAT_THEMES[0].hoverSecondary,
+    };
+  };
+
   return (
-    <Home />
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4">
+      <div className="max-w-7xl mx-auto">
+        {!isLoggedIn ? (
+          <LoginForm setIsLoggedIn={setIsLoggedIn} />
+        ) : (
+          <div className="w-full h-[calc(100vh-4rem)] flex flex-col md:flex-row gap-4">
+            {/* Sidebar */}
+            <Card className="w-full md:w-80 flex flex-col shadow-md">
+              <CardHeader className="pb-3 pt-5 px-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      {username && (
+                        <AvatarFallback className="bg-emerald-500 text-white">
+                          {getInitials(username)}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                    <div>
+                      <CardTitle className="text-lg">
+                        {username}
+                        <span className="text-gray-500 text-sm">#{tag}</span>
+                      </CardTitle>
+                      <Badge variant="outline" className="text-xs mt-1">
+                        Online
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ModeToggle />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleLogout}
+                      title="Logout"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="flex-1 overflow-hidden p-3">
+                <div className="flex justify-between items-center mb-3 px-2">
+                  <h3 className="text-sm font-medium flex items-center gap-1">
+                    <Users className="h-4 w-4" /> Contacts
+                  </h3>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setShowCreateGroup(true)}
+                    title="Create Group"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <ScrollArea className="h-[calc(100%-2.5rem)]">
+                  <div className="space-y-1 px-1 pb-4">
+                    <Button
+                      variant={selectedUser === "" ? "default" : "ghost"}
+                      className="w-full justify-start text-left h-10"
+                      onClick={() => setSelectedUser("")}
+                    >
+                      <span className="truncate">Broadcast</span>
+                    </Button>
+
+                    {onlineUsers
+                      .filter((client) => client !== `${username}#${tag}`)
+                      .map((client) => (
+                        <div
+                          key={client}
+                          className="flex items-center gap-1 group relative"
+                        >
+                          <Button
+                            variant={
+                              selectedUser === client ? "default" : "ghost"
+                            }
+                            className="w-full justify-start text-left h-10 pr-8"
+                            onClick={() => {
+                              setSelectedUser(client);
+                              socket?.emit("request_chat_history", {
+                                channel: client,
+                              });
+                            }}
+                          >
+                            <span className="truncate">
+                              {getDisplayName(client)}
+                              {nicknames[client] && (
+                                <span className="text-xs text-muted-foreground ml-1">
+                                  ({client})
+                                </span>
+                              )}
+                            </span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 flex-shrink-0 absolute right-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => openNicknameDialog(client)}
+                            title="Edit nickname"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+
+                    {userGroups.length > 0 && <div className="border-t my-2" />}
+
+                    {userGroups.map((group) => (
+                      <div
+                        key={group.name}
+                        className="flex items-center gap-1 group relative"
+                      >
+                        {group.members.includes(`${username}#${tag}`) ? (
+                          <Button
+                            variant={
+                              selectedUser === group.name ? "default" : "ghost"
+                            }
+                            className="w-full justify-start text-left h-10 pr-8"
+                            onClick={() => {
+                              setSelectedUser(group.name);
+                              socket?.emit("request_chat_history", {
+                                channel: group.name,
+                              });
+                            }}
+                          >
+                            <span className="truncate">{group.name}</span>
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left h-10 pr-8"
+                            onClick={() => {
+                              socket?.emit("join_group", group.name);
+                            }}
+                          >
+                            <span className="truncate">
+                              {group.name} (Click to Join)
+                            </span>
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+
+            {/* Chat Area */}
+            <Card className="flex-1 flex flex-col shadow-md">
+              <CardHeader className="pb-3 pt-5 px-5 border-b">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    {selectedUser ? (
+                      <>
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-xs bg-gray-200 dark:bg-gray-700">
+                            {getInitials(selectedUser)}
+                          </AvatarFallback>
+                        </Avatar>
+                        {getDisplayName(selectedUser)}
+                        {groupMembers.length > 0 && (
+                          <span className="text-xs opacity-60 truncate">
+                            ({groupMembers.join(", ")})
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Users className="h-5 w-5" />
+                        Broadcast
+                      </>
+                    )}
+                  </CardTitle>
+
+                  {selectedUser && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="flex items-center gap-1"
+                      onClick={openThemeDialog}
+                    >
+                      <Settings className="h-4 w-4" />
+                      <span className="hidden sm:inline">Chat Theme</span>
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+
+              <CardContent className="flex-1 overflow-hidden p-0 relative">
+                <ScrollArea className="h-[calc(100%-1rem)] p-5">
+                  <div className="space-y-4">
+                    {(chatHistory[selectedUser] || []).map((msg, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex ${msg.from === `${username}#${tag}` ? "justify-end" : "justify-start"}`}
+                      >
+                        {selectedUser &&
+                          groupMembers.length > 0 &&
+                          msg.from !== `${username}#${tag}` && (
+                            <Avatar className="h-8 w-8 mr-2 self-end pb-2">
+                              <AvatarFallback className="text-xs bg-gray-200 dark:bg-gray-700">
+                                {getInitials(msg.from)}
+                              </AvatarFallback>
+                            </Avatar>
+                          )}
+                        <div className="flex flex-col max-w-[75%]">
+                          {msg.id === editingMessage ? (
+                            <div className="flex flex-col gap-2">
+                              <Input
+                                value={editText}
+                                onChange={(e) => setEditText(e.target.value)}
+                                onKeyDown={handleKeyPress}
+                                autoFocus
+                                className="min-w-[200px]"
+                              />
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={handleCancelEdit}
+                                  className="h-7 w-7"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={handleSaveEdit}
+                                  className="h-7 w-7"
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              className={`px-4 py-2 rounded-2xl ${
+                                msg.from === `${username}#${tag}`
+                                  ? `text-white rounded-br-none ${getCurrentChatTheme().primary}`
+                                  : `text-gray-800 rounded-bl-none dark:text-gray-100 ${getCurrentChatTheme().secondary}`
+                              } relative group`}
+                            >
+                              {msg.type === "text" ? (
+                                <>
+                                  {msg.text}
+                                  {msg.edited && (
+                                    <span className="text-xs opacity-70 ml-1">
+                                      (edited)
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                renderSticker(msg.text)
+                              )}
+
+                              {msg.from === `${username}#${tag}` &&
+                                msg.type === "text" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute -top-3 -right-3 h-6 w-6 bg-white dark:bg-gray-800 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() =>
+                                      handleEditMessage(msg.id, msg.text)
+                                    }
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                )}
+                            </div>
+                          )}
+                          <span
+                            className={`text-xs mt-1 text-gray-500 ${
+                              msg.from === `${username}#${tag}`
+                                ? "text-right"
+                                : "text-left"
+                            }`}
+                          >
+                            {formatTime(msg.timestamp)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </ScrollArea>
+
+                {/* Typing indicator */}
+                {isUserTyping().length > 0 && (
+                  <div className="absolute bottom-0 left-0 w-full px-4 py-1 text-sm text-gray-500 bg-gray-50 dark:bg-gray-800 border-t">
+                    {isUserTyping().join(", ")}{" "}
+                    {isUserTyping().length === 1 ? "is" : "are"} typing...
+                  </div>
+                )}
+              </CardContent>
+
+              <CardFooter className="border-t p-4">
+                <div className="flex w-full gap-2">
+                  <Input
+                    placeholder={
+                      editingMessage
+                        ? "Edit your message..."
+                        : "Type your message..."
+                    }
+                    value={editingMessage ? editText : message}
+                    onChange={(e) => {
+                      if (editingMessage) {
+                        setEditText(e.target.value);
+                      } else {
+                        setMessage(e.target.value);
+                        handleTyping();
+                      }
+                    }}
+                    onKeyDown={handleKeyPress}
+                    onBlur={() => {
+                      if (!editingMessage) {
+                        handleTypingStop();
+                      }
+                    }}
+                    className="flex-1"
+                  />
+
+                  {/* Emoji picker */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10"
+                      >
+                        <Smile className="h-5 w-5" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-2" align="end">
+                      <div className="grid grid-cols-6 gap-1 mb-2">
+                        {CHAT_EMOJIS.map((emoji, i) => (
+                          <Button
+                            key={i}
+                            variant="ghost"
+                            className="h-8 w-8 p-0"
+                            onClick={() => addEmoji(emoji)}
+                          >
+                            {emoji}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="border-t pt-2">
+                        <h4 className="text-sm font-medium mb-1">Stickers</h4>
+                        <div className="grid grid-cols-4 gap-1">
+                          {CHAT_STICKERS.map((sticker) => (
+                            <TooltipProvider key={sticker.id}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    className="h-12 w-12 p-1"
+                                    onClick={() =>
+                                      handleSendSticker(sticker.id)
+                                    }
+                                  >
+                                    <div className="relative w-full h-full flex items-center justify-center">
+                                      <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                      </div>
+                                      <Image
+                                        src={
+                                          sticker.url ||
+                                          `/vercel.svg?height=48&width=48`
+                                        }
+                                        alt={sticker.alt}
+                                        className="max-w-full max-h-full relative z-10"
+                                        onError={(e) => {
+                                          const target =
+                                            e.target as HTMLImageElement;
+                                          target.src = `/vercel.svg?height=48&width=48&text=${sticker.id}`;
+                                        }}
+                                        onLoad={(e) => {
+                                          const target =
+                                            e.target as HTMLImageElement;
+                                          target.parentElement?.classList.add(
+                                            "loaded",
+                                          );
+                                        }}
+                                      />
+                                    </div>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{sticker.alt}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+
+                  <Button
+                    onClick={editingMessage ? handleSaveEdit : handleSend}
+                    className={`${getCurrentChatTheme().primary} ${
+                      getCurrentChatTheme().hoverPrimary
+                    }`}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardFooter>
+            </Card>
+          </div>
+        )}
+      </div>
+
+      {/* Create Group Dialog */}
+      <CreateGroupDialog
+        showCreateGroup={showCreateGroup}
+        setShowCreateGroup={setShowCreateGroup}
+        groupName={groupName}
+        setGroupName={setGroupName}
+        clients={onlineUsers}
+        selectedMembers={selectedMembers}
+        handleToggleMember={handleToggleMember}
+        handleCreateGroup={handleCreateGroup}
+      />
+
+      {/* Nickname Dialog */}
+      <NicknameDialog
+        saveNickname={saveNickname}
+        nicknameInput={nicknameInput}
+        setNicknameInput={setNicknameInput}
+        setShowNicknameDialog={setShowNicknameDialog}
+        showNicknameDialog={showNicknameDialog}
+        nicknameTarget={nicknameTarget}
+        getInitials={getInitials}
+      />
+
+      {/* Theme Dialog */}
+      <ThemeDialog
+        saveTheme={saveTheme}
+        selectedTheme={selectedTheme}
+        setSelectedTheme={setSelectedTheme}
+        setShowThemeDialog={setShowThemeDialog}
+        showThemeDialog={showThemeDialog}
+      />
+    </div>
   );
 }
