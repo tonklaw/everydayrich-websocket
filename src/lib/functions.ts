@@ -135,7 +135,7 @@ export function handleBroadcastMessage(
   message: ChatMessage,
   chatHistory: Map<string, ChatMessage[]>,
 ) {
-  socket.broadcast.emit("message", message);
+  socket.emit("message", message);
 
   // Store in global chat history
   const broadcastMessages = chatHistory.get("broadcast") || [];
@@ -172,6 +172,7 @@ export function handleGroupMessage(
 // Function to handle direct messages
 export function handleDirectMessage(
   io: Server,
+  socket: Socket,
   message: ChatMessage,
   senderUsername: string,
   socketsByUsername: Map<string, string>,
@@ -187,6 +188,7 @@ export function handleDirectMessage(
 
   if (recipientSocketId) {
     io.to(recipientSocketId).emit("message", message);
+    socket.emit("message", message);
   }
 }
 

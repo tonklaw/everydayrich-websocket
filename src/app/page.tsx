@@ -121,17 +121,12 @@ export default function Home() {
     const to = selectedUser;
     const newMessage: ChatMessage = {
       id: Date.now().toString(),
-      from: username!,
+      from: `${username}#${tag}`,
       to,
       text: content,
       timestamp: Date.now(),
       type,
     };
-
-    // setChatHistory((prev) => ({
-    //   ...prev,
-    //   [to]: [...(prev[to] || []), newMessage],
-    // }));
 
     // Emit the message to the server
     if (socket) socket.emit("send_message", newMessage);
@@ -141,6 +136,40 @@ export default function Home() {
     // Clear typing indicator when sending a message
     handleTypingStop();
   };
+
+  useEffect(() => {
+    if (socket) {
+      socket.on("message", (data: ChatMessage) => {
+        if (data.from == `${username}#${tag}`) {
+          setChatHistory((prev) => ({
+            ...prev,
+            [data.to]: [...(prev[data.to] || []), data],
+          }));
+        } else {
+          setChatHistory((prev) => ({
+            ...prev,
+            [data.from]: [...(prev[data.from] || []), data],
+          }));
+        }
+        scrollToBottom();
+      });
+
+      socket.on("typing", (user: string) => {
+        _setTypingUsers((prev) => ({ ...prev, [user]: true }));
+      });
+
+      socket.on("stop_typing", (user: string) => {
+        _setTypingUsers((prev) => ({ ...prev, [user]: false }));
+      });
+    }
+    return () => {
+      if (socket) {
+        socket.off("message");
+        socket.off("typing");
+        socket.off("stop_typing");
+      }
+    };
+  }, [socket, username, tag]);
 
   const handleSendSticker = (stickerId: string) => {
     sendMessage(stickerId, "sticker");
@@ -445,7 +474,7 @@ export default function Home() {
                     </Button>
 
                     {onlineUsers
-                      .filter((client) => client !== username)
+                      .filter((client) => client !== `${username}#${tag}`)
                       .map((client) => (
                         <div
                           key={client}
@@ -525,7 +554,7 @@ export default function Home() {
                     {(chatHistory[selectedUser] || []).map((msg, idx) => (
                       <div
                         key={idx}
-                        className={`flex ${msg.from === username ? "justify-end" : "justify-start"}`}
+                        className={`flex ${msg.from === `${username}#${tag}` ? "justify-end" : "justify-start"}`}
                       >
                         <div className="flex flex-col max-w-[75%]">
                           {msg.id === editingMessage ? (
@@ -559,7 +588,7 @@ export default function Home() {
                           ) : (
                             <div
                               className={`px-4 py-2 rounded-2xl ${
-                                msg.from === username
+                                msg.from === `${username}#${tag}`
                                   ? `text-white rounded-br-none ${getCurrentChatTheme().primary}`
                                   : `text-gray-800 rounded-bl-none dark:text-gray-100 ${getCurrentChatTheme().secondary}`
                               } relative group`}
@@ -577,23 +606,26 @@ export default function Home() {
                                 renderSticker(msg.text)
                               )}
 
-                              {msg.from === username && msg.type === "text" && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="absolute -top-3 -right-3 h-6 w-6 bg-white dark:bg-gray-800 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={() =>
-                                    handleEditMessage(msg.id, msg.text)
-                                  }
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                              )}
+                              {msg.from === `${username}#${tag}` &&
+                                msg.type === "text" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute -top-3 -right-3 h-6 w-6 bg-white dark:bg-gray-800 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() =>
+                                      handleEditMessage(msg.id, msg.text)
+                                    }
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                )}
                             </div>
                           )}
                           <span
                             className={`text-xs mt-1 text-gray-500 ${
-                              msg.from === username ? "text-right" : "text-left"
+                              msg.from === `${username}#${tag}`
+                                ? "text-right"
+                                : "text-left"
                             }`}
                           >
                             {formatTime(msg.timestamp)}

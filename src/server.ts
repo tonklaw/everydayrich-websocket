@@ -109,6 +109,7 @@ app.prepare().then(async () => {
         // Direct message to a specific user
         handleDirectMessage(
           io,
+          socket,
           message,
           senderUsername,
           SOCKET_BY_USERTAG,
