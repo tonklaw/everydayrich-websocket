@@ -141,7 +141,7 @@ export default function Home() {
       groupName,
       members: selectedMembers,
     };
-    console.log("Creating group:", groupData);
+    socket?.emit("create_group", groupData);
     setShowCreateGroup(false);
     setGroupName("");
     setSelectedMembers([]);

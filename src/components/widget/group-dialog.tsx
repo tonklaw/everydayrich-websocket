@@ -77,6 +77,7 @@ export function CreateGroupDialog({
             Cancel
           </Button>
           <Button
+            disabled={!groupName || selectedMembers.length <= 1}
             onClick={handleCreateGroup}
             className="bg-emerald-500 hover:bg-emerald-600"
           >
