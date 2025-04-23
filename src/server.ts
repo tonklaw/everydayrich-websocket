@@ -179,18 +179,18 @@ app.prepare().then(async () => {
       );
     });
 
-    socket.on("typing", () => {
+    socket.on("typing", ({ channel }: { channel: string }) => {
       const username = CONNECTED_USERTAG.get(socket.id);
       if (!username) return;
       console.log(username, "is typing");
-      socket.broadcast.emit("typing", { username });
+      socket.broadcast.emit("typing", { username, channel });
     });
 
-    socket.on("stop_typing", () => {
+    socket.on("stop_typing", ({ channel }: { channel: string }) => {
       const username = CONNECTED_USERTAG.get(socket.id);
       if (!username) return;
       console.log(username, "is not typing");
-      socket.broadcast.emit("stop_typing", { username });
+      socket.broadcast.emit("stop_typing", { username, channel });
     });
 
     socket.on(
@@ -213,7 +213,7 @@ app.prepare().then(async () => {
           chatHistory[messageIndex].edited = true;
           chatHistory[messageIndex].text = message.text;
           CHAT_HISTORY.set(channel, chatHistory);
-          socket.emit("chat_history", { channel, message });
+          socket.emit("chat_history", { channel, message: chatHistory });
           socket.broadcast.emit("chat_history", {
             channel,
             messages: chatHistory,

@@ -19,7 +19,7 @@ interface AppContextType {
   username: string | null;
   onlineUsers: string[];
   userGroups: Group[];
-  typingUsers: Record<string, boolean>;
+  typingUsers: Record<string, string[]>;
   browserId: string;
   chatHistory: Record<string, ChatMessage[]>;
   chatThemeSettings: Record<string, Omit<ChatTheme, "name">>;
@@ -41,7 +41,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [socket, setSocket] = useState<Socket | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [userGroups, setUserGroups] = useState<Group[]>([]);
-  const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
+  const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [chatThemeSettings, setChatThemeSettings] = useState<
     Record<string, Omit<ChatTheme, "name">>
   >({});
@@ -99,13 +99,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       setOnlineUsers(users);
     });
 
-    socketInstance.on("typing", ({ username }: { username: string }) => {
-      setTypingUsers((prev) => ({ ...prev, [username]: true }));
-    });
+    socketInstance.on(
+      "typing",
+      ({ username, channel }: { username: string; channel: string }) => {
+        setTypingUsers((prev) => {
+          const channelUsers = prev[channel] || [];
+          return {
+            ...prev,
+            [channel]: Array.isArray(channelUsers)
+              ? [...channelUsers, username]
+              : [username],
+          };
+        });
+      },
+    );
 
-    socketInstance.on("stop_typing", ({ username }: { username: string }) => {
-      setTypingUsers((prev) => ({ ...prev, [username]: false }));
-    });
+    socketInstance.on(
+      "stop_typing",
+      ({ username, channel }: { username: string; channel: string }) => {
+        setTypingUsers((prev) => {
+          const channelUsers = prev[channel] || [];
+          if (!Array.isArray(channelUsers)) return prev;
+
+          return {
+            ...prev,
+            [channel]: channelUsers.filter((user) => user !== username),
+          };
+        });
+      },
+    );
 
     socketInstance.on("theme", (data: { channel: string; idx: number }) => {
       setChatThemeSettings((prev) => ({

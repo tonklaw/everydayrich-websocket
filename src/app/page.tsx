@@ -64,6 +64,7 @@ export default function Home() {
   } = useApp();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedUser, setSelectedUser] = useState("");
+  const [groupMembers, setGroupMembers] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [editingMessage, setEditingMessage] = useState<string | null>(null);
@@ -87,8 +88,19 @@ export default function Home() {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    if (selectedUser) {
+      const group = userGroups.find((g) => g.name === selectedUser);
+      if (group) {
+        setGroupMembers([
+          `${username}#${tag}`,
+          ...group.members.filter((m) => m !== `${username}#${tag}`),
+        ]);
+      } else {
+        setGroupMembers([]);
+      }
+    }
     scrollToBottom();
-  }, [chatHistory, selectedUser]);
+  }, [chatHistory, selectedUser, username, tag, userGroups]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -161,7 +173,11 @@ export default function Home() {
   const handleTyping = () => {
     if (!isTyping) {
       setIsTyping(true);
-      if (socket) socket.emit("typing", { username: `${username}#${tag}` });
+      if (socket)
+        socket.emit("typing", {
+          username: `${username}#${tag}`,
+          channel: selectedUser,
+        });
     }
 
     // Clear existing timeout
@@ -179,7 +195,10 @@ export default function Home() {
     if (isTyping) {
       setIsTyping(false);
       if (socket)
-        socket.emit("stop_typing", { username: `${username}#${tag}` });
+        socket.emit("stop_typing", {
+          username: `${username}#${tag}`,
+          channel: selectedUser,
+        });
     }
 
     if (typingTimeoutRef.current) {
@@ -300,12 +319,18 @@ export default function Home() {
   };
 
   const isUserTyping = () => {
-    return Object.entries(typingUsers)
-      .filter(
-        ([user, isTyping]) =>
-          isTyping && (!selectedUser || user === selectedUser),
-      )
-      .map(([user]) => user);
+    // const channel = selectedUser.includes("#")
+    //   ? [selectedUser, `${username}#${tag}`].sort().join("_")
+    //   : selectedUser;
+    const channel = selectedUser;
+    const myUserTag = `${username}#${tag}`;
+    const typingUsersInChannel = (typingUsers[channel] || []).filter(
+      (e) => e !== myUserTag,
+    );
+    return [
+      ...typingUsersInChannel,
+      ...(typingUsers[myUserTag] || []).filter((e) => e === channel),
+    ];
   };
 
   const renderSticker = (stickerId: string) => {
@@ -464,23 +489,41 @@ export default function Home() {
                         </div>
                       ))}
 
+                    {userGroups.length > 0 && <div className="border-t my-2" />}
+
                     {userGroups.map((group) => (
                       <div
                         key={group.name}
                         className="flex items-center gap-1 group relative"
                       >
-                        <Button
-                          variant={selectedUser === group.name ? "default" : "ghost"}
-                          className="w-full justify-start text-left h-10 pr-8"
-                          onClick={() => {
-                            setSelectedUser(group.name);
-                            socket?.emit("request_chat_history", {
-                              channel: group.name,
-                            });
-                          }}
-                        >
-                          <span className="truncate">{group.name}</span>
-                        </Button>
+                        {group.members.includes(`${username}#${tag}`) ? (
+                          <Button
+                            variant={
+                              selectedUser === group.name ? "default" : "ghost"
+                            }
+                            className="w-full justify-start text-left h-10 pr-8"
+                            onClick={() => {
+                              setSelectedUser(group.name);
+                              socket?.emit("request_chat_history", {
+                                channel: group.name,
+                              });
+                            }}
+                          >
+                            <span className="truncate">{group.name}</span>
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left h-10 pr-8"
+                            onClick={() => {
+                              socket?.emit("join_group", group.name);
+                            }}
+                          >
+                            <span className="truncate">
+                              {group.name} (Click to Join)
+                            </span>
+                          </Button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -501,6 +544,11 @@ export default function Home() {
                           </AvatarFallback>
                         </Avatar>
                         {getDisplayName(selectedUser)}
+                        {groupMembers.length > 0 && (
+                          <span className="text-xs opacity-60 truncate">
+                            ({groupMembers.join(", ")})
+                          </span>
+                        )}
                       </>
                     ) : (
                       <>
@@ -532,6 +580,15 @@ export default function Home() {
                         key={idx}
                         className={`flex ${msg.from === `${username}#${tag}` ? "justify-end" : "justify-start"}`}
                       >
+                        {selectedUser &&
+                          groupMembers.length > 0 &&
+                          msg.from !== `${username}#${tag}` && (
+                            <Avatar className="h-8 w-8 mr-2 self-end pb-2">
+                              <AvatarFallback className="text-xs bg-gray-200 dark:bg-gray-700">
+                                {getInitials(msg.from)}
+                              </AvatarFallback>
+                            </Avatar>
+                          )}
                         <div className="flex flex-col max-w-[75%]">
                           {msg.id === editingMessage ? (
                             <div className="flex flex-col gap-2">
