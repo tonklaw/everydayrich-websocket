@@ -53,6 +53,7 @@ export default function Home() {
   const {
     tag,
     onlineUsers,
+    userGroups,
     username,
     socket,
     typingUsers,
@@ -464,6 +465,26 @@ export default function Home() {
                           </Button>
                         </div>
                       ))}
+
+                    {userGroups.map((group) => (
+                      <div
+                        key={group.name}
+                        className="flex items-center gap-1 group relative"
+                      >
+                        <Button
+                          variant={selectedUser === group.name ? "default" : "ghost"}
+                          className="w-full justify-start text-left h-10 pr-8"
+                          onClick={() => {
+                            setSelectedUser(group.name);
+                            socket?.emit("request_chat_history", {
+                              channel: group.name,
+                            });
+                          }}
+                        >
+                          <span className="truncate">{group.name}</span>
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 </ScrollArea>
               </CardContent>

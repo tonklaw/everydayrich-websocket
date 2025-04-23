@@ -11,11 +11,13 @@ import { v4 as uuidv4 } from "uuid";
 import { io, Socket } from "socket.io-client";
 import { LoginRequest, LoginResponse } from "@/type/login";
 import { ChatMessage } from "@/type/chat-message";
+import { Group } from "@/type/group";
 
 interface AppContextType {
   tag: string | null;
   username: string | null;
   onlineUsers: string[];
+  userGroups: Group[];
   typingUsers: Record<string, boolean>;
   browserId: string;
   chatHistory: Record<string, ChatMessage[]>;
@@ -35,6 +37,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [browserId, setBrowserId] = useState<string>("");
   const [socket, setSocket] = useState<Socket | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [userGroups, setUserGroups] = useState<Group[]>([]);
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
   const [chatHistory, setChatHistory] = useState<Record<string, ChatMessage[]>>(
     {
@@ -81,8 +84,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("error", (error) => {
       console.error("Socket error:", error);
     });
-    socketInstance.on("groups", (groups: string[]) => {
-      console.log("Groups:", groups);
+
+    socketInstance.on("groups", (groups: Group[]) => {
+      setUserGroups(groups);
     });
 
     socketInstance.on("clients", (users: string[]) => {
@@ -183,6 +187,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     username,
     browserId,
     onlineUsers,
+    userGroups,
     chatHistory,
     setChatHistory,
     typingUsers,

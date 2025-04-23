@@ -228,6 +228,8 @@ export function createGroup(
     members: groupData.members,
   });
 
+  broadcastGroups(io);
+
   return true;
 }
 
@@ -277,6 +279,8 @@ export function handleJoinGroup(
     groupName,
     members: group.members,
   });
+
+  broadcastGroups(io);
 
   return true;
 }

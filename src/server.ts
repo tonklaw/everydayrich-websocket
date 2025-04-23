@@ -113,6 +113,11 @@ app.prepare().then(async () => {
       }
     });
 
+    socket.on("groups", (_, callback) => {
+      const groupList = Array.from(GROUPS.values())
+      callback(groupList);
+    });
+
     // Handle group creation
     socket.on(
       "create_group",
