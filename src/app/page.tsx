@@ -50,23 +50,16 @@ import { useApp } from "@/components/app-context";
 import { LoginForm } from "@/components/widget/login-form";
 
 export default function Home() {
-  const { tag, onlineUsers, username, socket, typingUsers } = useApp();
+  const {
+    tag,
+    onlineUsers,
+    username,
+    socket,
+    typingUsers,
+    chatHistory,
+    setChatHistory,
+  } = useApp();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  const [chatHistory, setChatHistory] = useState<Record<string, ChatMessage[]>>(
-    {
-      "": [
-        {
-          id: "1",
-          from: "system",
-          to: "",
-          text: "Welcome to the chat! Select a user to start chatting or use broadcast to message everyone.",
-          timestamp: Date.now(),
-          type: "text",
-        },
-      ],
-    },
-  );
   const [selectedUser, setSelectedUser] = useState("");
   const [message, setMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -125,30 +118,6 @@ export default function Home() {
     // Clear typing indicator when sending a message
     handleTypingStop();
   };
-
-  useEffect(() => {
-    if (socket) {
-      socket.on("message", (data: ChatMessage) => {
-        if (data.from == `${username}#${tag}`) {
-          setChatHistory((prev) => ({
-            ...prev,
-            [data.to]: [...(prev[data.to] || []), data],
-          }));
-        } else {
-          setChatHistory((prev) => ({
-            ...prev,
-            [data.from]: [...(prev[data.from] || []), data],
-          }));
-        }
-        scrollToBottom();
-      });
-    }
-    return () => {
-      if (socket) {
-        socket.off("message");
-      }
-    };
-  }, [socket, username, tag]);
 
   const handleSendSticker = (stickerId: string) => {
     sendMessage(stickerId, "sticker");
@@ -468,7 +437,12 @@ export default function Home() {
                               selectedUser === client ? "default" : "ghost"
                             }
                             className="w-full justify-start text-left h-10 pr-8"
-                            onClick={() => setSelectedUser(client)}
+                            onClick={() => {
+                              setSelectedUser(client);
+                              socket?.emit("request_chat_history", {
+                                channel: client,
+                              });
+                            }}
                           >
                             <span className="truncate">
                               {getDisplayName(client)}

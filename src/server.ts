@@ -65,15 +65,10 @@ app.prepare().then(async () => {
         callback({ success: true, tag: ack.tag });
 
         // Send broadcast chat history
-        sendBroadcastHistory(socket, CHAT_HISTORY);
+        sendBroadcastHistory(socket);
 
         // Send direct message history for this user
-        sendDirectMessageHistory(
-          socket,
-          username,
-
-          DIRECT_MESSAGE_HISTORY,
-        );
+        sendDirectMessageHistory(socket, username);
 
         joinUserToGroups(socket, username, GROUPS, CHAT_HISTORY);
         broadcastClients(io);
@@ -95,7 +90,7 @@ app.prepare().then(async () => {
 
       if (!message.to) {
         // Broadcast message to all users except sender
-        handleBroadcastMessage(socket, message, CHAT_HISTORY);
+        handleBroadcastMessage(io, message);
       } else if (GROUPS.has(message.to)) {
         // Group message
         handleGroupMessage(

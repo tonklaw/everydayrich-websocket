@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  Dispatch,
+} from "react";
 import { v4 as uuidv4 } from "uuid";
 import { io, Socket } from "socket.io-client";
 import { LoginRequest, LoginResponse } from "@/type/login";
@@ -12,6 +18,8 @@ interface AppContextType {
   onlineUsers: string[];
   typingUsers: Record<string, boolean>;
   browserId: string;
+  chatHistory: Record<string, ChatMessage[]>;
+  setChatHistory: Dispatch<React.SetStateAction<Record<string, ChatMessage[]>>>;
   login: (username: string, password: string) => Promise<LoginResponse>;
   logout: () => void;
   socket: Socket | null;
@@ -28,6 +36,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [socket, setSocket] = useState<Socket | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
+  const [chatHistory, setChatHistory] = useState<Record<string, ChatMessage[]>>(
+    {
+      "": [
+        {
+          id: "1",
+          from: "system",
+          to: "",
+          text: "Welcome to the chat! Select a user to start chatting or use broadcast to message everyone.",
+          timestamp: Date.now(),
+          type: "text",
+        },
+      ],
+    },
+  );
 
   useEffect(() => {
     // Initialize state from localStorage in useEffect to avoid SSR issues
@@ -76,8 +98,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     socketInstance.on("message", (data: ChatMessage) => {
-      console.log("Message received:", data);
+      setChatHistory((prev) => ({
+        ...prev,
+        [data.to]: [...(prev[data.to] || []), data],
+      }));
     });
+
+    socketInstance.on(
+      "chat_history",
+      (data: { channel: string; messages: ChatMessage[] }) => {
+        setChatHistory((prev) => ({
+          ...prev,
+          [data.channel]: data.messages,
+        }));
+      },
+    );
 
     setSocket(socketInstance);
 
@@ -148,6 +183,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     username,
     browserId,
     onlineUsers,
+    chatHistory,
+    setChatHistory,
     typingUsers,
     login,
     logout,

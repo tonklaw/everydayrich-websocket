@@ -2,7 +2,9 @@ import { ChatMessage } from "@/type/chat-message";
 import { Group } from "@/type/group";
 import { Socket, Server } from "socket.io";
 import {
+  CHAT_HISTORY,
   CONNECTED_USERTAG,
+  DIRECT_MESSAGE_HISTORY,
   GROUPS,
   SOCKET_BY_USERTAG,
   USERS,
@@ -76,27 +78,20 @@ export function sendChatHistory(
 }
 
 // Function to send broadcast history
-export function sendBroadcastHistory(
-  socket: Socket,
-  chatHistory: Map<string, ChatMessage[]>,
-) {
-  const broadcastHistory = chatHistory.get("broadcast") || [];
+export function sendBroadcastHistory(socket: Socket) {
+  const broadcastHistory = CHAT_HISTORY.get("broadcast") || [];
   if (broadcastHistory.length > 0) {
     sendChatHistory(socket, "", broadcastHistory);
   }
 }
 
 // Function to send direct message history
-export function sendDirectMessageHistory(
-  socket: Socket,
-  username: string,
-  directMessageHistory: Map<string, ChatMessage[]>,
-) {
+export function sendDirectMessageHistory(socket: Socket, username: string) {
   CONNECTED_USERTAG.forEach((client) => {
     if (client === username) return; // Skip self
 
     const dmKey = getDirectMessageKey(username, client);
-    const dmHistory = directMessageHistory.get(dmKey) || [];
+    const dmHistory = DIRECT_MESSAGE_HISTORY.get(dmKey) || [];
     if (dmHistory.length > 0) {
       sendChatHistory(socket, client, dmHistory);
     }
@@ -130,17 +125,13 @@ export function joinUserToGroups(
 }
 
 // Function to handle broadcast messages
-export function handleBroadcastMessage(
-  socket: Socket,
-  message: ChatMessage,
-  chatHistory: Map<string, ChatMessage[]>,
-) {
-  socket.emit("message", message);
+export function handleBroadcastMessage(io: Server, message: ChatMessage) {
+  io.emit("message", message);
 
   // Store in global chat history
-  const broadcastMessages = chatHistory.get("broadcast") || [];
+  const broadcastMessages = CHAT_HISTORY.get("broadcast") || [];
   broadcastMessages.push(message);
-  chatHistory.set("broadcast", broadcastMessages);
+  CHAT_HISTORY.set("broadcast", broadcastMessages);
 }
 
 // Function to handle group messages
