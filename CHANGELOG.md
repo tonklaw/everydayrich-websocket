@@ -1,3 +1,10 @@
+# [1.1.0-beta.2](https://github.com/tonklaw/everydayrich-websocket/compare/v1.1.0-beta.1...v1.1.0-beta.2) (2025-04-23)
+
+
+### Features
+
+* trigger semver ([563a1ea](https://github.com/tonklaw/everydayrich-websocket/commit/563a1eab7346f43085467e97defaa52b64767429))
+
 # [1.1.0-beta.1](https://github.com/tonklaw/everydayrich-websocket/compare/v1.0.1...v1.1.0-beta.1) (2025-04-23)
 
 
