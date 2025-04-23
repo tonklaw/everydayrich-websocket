@@ -115,7 +115,7 @@ app.prepare().then(async () => {
     });
 
     socket.on("groups", (_, callback) => {
-      const groupList = Array.from(GROUPS.values())
+      const groupList = Array.from(GROUPS.values());
       callback(groupList);
     });
 
@@ -192,6 +192,35 @@ app.prepare().then(async () => {
       console.log(username, "is not typing");
       socket.broadcast.emit("stop_typing", { username });
     });
+
+    socket.on(
+      "edit_message",
+      (data: { channel: string; message: ChatMessage }) => {
+        const username = CONNECTED_USERTAG.get(socket.id);
+        if (!username) return;
+
+        const { channel, message } = data;
+        console.log("Edit message", message, channel);
+        const chatHistory =
+          channel === ""
+            ? CHAT_HISTORY.get("broadcast")
+            : CHAT_HISTORY.get(channel);
+        if (!chatHistory) return;
+        const messageIndex = chatHistory.findIndex(
+          (msg) => msg.id === message.id,
+        );
+        if (messageIndex !== -1) {
+          chatHistory[messageIndex].edited = true;
+          chatHistory[messageIndex].text = message.text;
+          CHAT_HISTORY.set(channel, chatHistory);
+          socket.emit("chat_history", { channel, message });
+          socket.broadcast.emit("chat_history", {
+            channel,
+            messages: chatHistory,
+          });
+        }
+      },
+    );
 
     // Handle disconnection
     socket.on("disconnect", () => {

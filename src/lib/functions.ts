@@ -158,6 +158,7 @@ export function handleGroupMessage(
 
   // Send to all group members except sender
   socket.to(message.to).emit("message", message);
+  socket.emit("message", message);
   return true;
 }
 

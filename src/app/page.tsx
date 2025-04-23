@@ -214,6 +214,11 @@ export default function Home() {
         };
       }
 
+      socket?.emit("edit_message", {
+        channel: key,
+        message: messages[messageIndex],
+      });
+
       return {
         ...prev,
         [key]: messages,
