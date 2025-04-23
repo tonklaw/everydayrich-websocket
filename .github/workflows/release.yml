@@ -93,7 +93,7 @@ jobs:
       cancel-in-progress: true
     strategy:
       matrix:
-        platform: [linux/amd64, linux/arm64]
+        platform: [linux/amd64]
     name: Build and Push Docker Image (${{ matrix.platform }})
     needs: release
     if: ${{ needs.release.outputs.version != '' }}
